@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -12,6 +13,8 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
+
+app.use("/uploads", express.static(path.resolve(__dirname, "..", "uploads")));
 
 app.use("/health", healthRouter);
 app.use("/vehicles", vehicleRouter);
