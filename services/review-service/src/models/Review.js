@@ -1,11 +1,29 @@
 const mongoose = require("mongoose");
 
-const reviewSchema = new mongoose.Schema(
+const reviewerSchema = new mongoose.Schema(
   {
     userId: {
       type: String,
       required: true,
       index: true
+    },
+    displayName: {
+      type: String,
+      trim: true
+    },
+    avatarUrl: {
+      type: String,
+      trim: true
+    }
+  },
+  { _id: false }
+);
+
+const reviewSchema = new mongoose.Schema(
+  {
+    reviewer: {
+      type: reviewerSchema,
+      required: true
     },
     vehicleId: {
       type: String,
@@ -29,6 +47,13 @@ const reviewSchema = new mongoose.Schema(
     comment: {
       type: String,
       trim: true
+    },
+    isPublished: {
+      type: Boolean,
+      default: true
+    },
+    flaggedAt: {
+      type: Date
     }
   },
   { timestamps: true }
