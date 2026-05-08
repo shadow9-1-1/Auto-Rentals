@@ -9,6 +9,45 @@ const availabilitySchema = new mongoose.Schema(
     endDate: {
       type: Date,
       required: true
+    },
+    status: {
+      type: String,
+      enum: ["available", "blocked", "booked"],
+      default: "available"
+    },
+    reason: {
+      type: String,
+      trim: true
+    }
+  },
+  { _id: false }
+);
+
+availabilitySchema.path("endDate").validate({
+  validator: function (value) {
+    return !this.startDate || !value || value >= this.startDate;
+  },
+  message: "Availability endDate must be after startDate"
+});
+
+const imageSchema = new mongoose.Schema(
+  {
+    url: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    caption: {
+      type: String,
+      trim: true
+    },
+    isPrimary: {
+      type: Boolean,
+      default: false
+    },
+    sortOrder: {
+      type: Number,
+      default: 0
     }
   },
   { _id: false }
@@ -35,19 +74,79 @@ const vehicleSchema = new mongoose.Schema(
       type: Number,
       required: true
     },
-    pricePerDay: {
-      type: Number,
-      required: true,
-      min: 0
+    pricing: {
+      perDay: {
+        type: Number,
+        required: true,
+        min: 0
+      },
+      perHour: {
+        type: Number,
+        min: 0
+      },
+      currency: {
+        type: String,
+        default: "USD",
+        trim: true
+      },
+      securityDeposit: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      cleaningFee: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      weeklyDiscountPercent: {
+        type: Number,
+        min: 0,
+        max: 100,
+        default: 0
+      },
+      monthlyDiscountPercent: {
+        type: Number,
+        min: 0,
+        max: 100,
+        default: 0
+      }
     },
     location: {
+      addressLine1: {
+        type: String,
+        trim: true
+      },
+      addressLine2: {
+        type: String,
+        trim: true
+      },
       city: {
+        type: String,
+        trim: true
+      },
+      state: {
         type: String,
         trim: true
       },
       country: {
         type: String,
         trim: true
+      },
+      postalCode: {
+        type: String,
+        trim: true
+      },
+      coordinates: {
+        type: {
+          type: String,
+          enum: ["Point"],
+          default: "Point"
+        },
+        coordinates: {
+          type: [Number],
+          default: undefined
+        }
       }
     },
     status: {
@@ -60,7 +159,7 @@ const vehicleSchema = new mongoose.Schema(
       default: []
     },
     images: {
-      type: [String],
+      type: [imageSchema],
       default: []
     },
     availability: {
@@ -70,5 +169,7 @@ const vehicleSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+vehicleSchema.index({ "location.coordinates": "2dsphere" });
 
 module.exports = mongoose.model("Vehicle", vehicleSchema);
