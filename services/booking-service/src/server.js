@@ -1,10 +1,13 @@
+const path = require("path");
+
+require("dotenv").config({ path: path.resolve(__dirname, "../../..", ".env") });
 require("dotenv").config();
 
 const app = require("./app");
 const connectDatabase = require("./config/database");
 const { connectProducer } = require("./config/kafka");
 
-const port = process.env.PORT || 4003;
+const port = process.env.BOOKING_SERVICE_PORT || process.env.PORT || 4003;
 
 const startServer = async () => {
   try {
