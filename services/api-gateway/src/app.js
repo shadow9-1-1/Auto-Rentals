@@ -52,10 +52,13 @@ const proxyFor = (target) =>
   createProxyMiddleware({
     target,
     changeOrigin: true,
-    onProxyReq: fixRequestBody,
-    onError: (err, req, res) => {
-      if (!res.headersSent) {
-        res.status(502).json({ error: "Upstream service unavailable" });
+    pathRewrite: (path, req) => req.originalUrl,
+    on: {
+      proxyReq: fixRequestBody,
+      error: (err, req, res) => {
+        if (!res.headersSent) {
+          res.status(502).json({ error: "Upstream service unavailable" });
+        }
       }
     }
   });

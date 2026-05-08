@@ -9,12 +9,12 @@ services:
     environment:
       SERVICE_NAME: api-gateway
       API_GATEWAY_PORT: ${API_GATEWAY_PORT:-4000}
-      AUTH_SERVICE_URL: http://localhost:4001
-      VEHICLE_SERVICE_URL: http://localhost:4002
-      BOOKING_SERVICE_URL: http://localhost:4003
-      PAYMENT_SERVICE_URL: http://localhost:4004
-      REVIEW_SERVICE_URL: http://localhost:4006
-      ADMIN_SERVICE_URL: http://localhost:4007
+      AUTH_SERVICE_URL: http://auth-service:4001
+      VEHICLE_SERVICE_URL: http://vehicle-service:4002
+      BOOKING_SERVICE_URL: http://booking-service:4003
+      PAYMENT_SERVICE_URL: http://payment-service:4004
+      REVIEW_SERVICE_URL: http://review-service:4006
+      ADMIN_SERVICE_URL: http://admin-service:4007
     ports:
       - "${API_GATEWAY_PORT:-4000}:4000"
     depends_on:
@@ -202,15 +202,15 @@ services:
     networks:
       - auto-rentals
 
-  prometheus:
-    image: prom/prometheus:v2.52.0
-    volumes:
-      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    ports:
-      - "9090:9090"
-    networks:
-      - auto-rentals
+  # prometheus:
+  #   image: prom/prometheus:v2.52.0
+  #   volumes:
+  #     - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - prometheus-data:/prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   networks:
+  #     - auto-rentals
 
   grafana:
     image: grafana/grafana:10.4.1
@@ -226,7 +226,7 @@ volumes:
   kafka-data:
   zookeeper-data:
   opensearch-data:
-  prometheus-data:
+  # prometheus-data:
   grafana-data:
 
 networks:

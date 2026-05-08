@@ -10,22 +10,33 @@ const createToken = (user) => {
   });
 };
 
+const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
+const isValidEmail = (value) => /\S+@\S+\.\S+/.test(value);
+
 const register = async (req, res, next) => {
   try {
-    const { email, password, role, roles } = req.body;
+    const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const existingUser = await User.findOne({ email });
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({ error: "Email is invalid" });
+    }
+
+    if (typeof password !== "string" || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(409).json({ error: "Email already registered" });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const normalizedRoles = Array.isArray(roles) && roles.length ? roles : role ? [role] : undefined;
-    const user = await User.create({ email, passwordHash, roles: normalizedRoles });
+    const user = await User.create({ email: normalizedEmail, passwordHash, roles: ["user"] });
 
     const token = createToken(user);
     res.status(201).json({
@@ -33,6 +44,9 @@ const register = async (req, res, next) => {
       token
     });
   } catch (error) {
+    if (error && error.code === 11000) {
+      return res.status(409).json({ error: "Email already registered" });
+    }
     next(error);
   }
 };

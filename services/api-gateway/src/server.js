@@ -1,5 +1,8 @@
 const path = require("path");
 
+// Suppress deprecation warnings from upstream dependencies.
+process.noDeprecation = true;
+
 require("dotenv").config({ path: path.resolve(__dirname, "../../..", ".env") });
 require("dotenv").config();
 
