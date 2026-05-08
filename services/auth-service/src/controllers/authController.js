@@ -3,10 +3,17 @@ const jwt = require("jsonwebtoken");
 
 const User = require("../models/User");
 
-const createToken = (user) => {
+const createAccessToken = (user) => {
   const payload = { sub: user._id, role: user.role, roles: user.roles };
   return jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "1d"
+  });
+};
+
+const createRefreshToken = (user) => {
+  const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
+  return jwt.sign({ sub: user._id, type: "refresh" }, secret, {
+    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d"
   });
 };
 
@@ -38,7 +45,7 @@ const register = async (req, res, next) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await User.create({ email: normalizedEmail, passwordHash, roles: ["user"] });
 
-    const token = createToken(user);
+    const token = createAccessToken(user);
     res.status(201).json({
       user: { id: user._id, email: user.email, role: user.role, roles: user.roles },
       token
@@ -54,12 +61,21 @@ const register = async (req, res, next) => {
 const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const user = await User.findOne({ email });
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({ error: "Email is invalid" });
+    }
+
+    if (typeof password !== "string" || password.length < 8) {
+      return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
@@ -77,10 +93,13 @@ const login = async (req, res, next) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const token = createToken(user);
+    const accessToken = createAccessToken(user);
+    const refreshToken = createRefreshToken(user);
     res.status(200).json({
       user: { id: user._id, email: user.email, role: user.role, roles: user.roles },
-      token
+      token: accessToken,
+      accessToken,
+      refreshToken
     });
   } catch (error) {
     next(error);
