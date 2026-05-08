@@ -1,0 +1,225 @@
+version: "3.9"
+
+services:
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+    env_file:
+      - ./.env
+    environment:
+      SERVICE_NAME: api-gateway
+      API_GATEWAY_PORT: ${API_GATEWAY_PORT:-4000}
+    ports:
+      - "${API_GATEWAY_PORT:-4000}:4000"
+    depends_on:
+      - auth-service
+      - vehicle-service
+      - booking-service
+      - payment-service
+      - notification-service
+      - review-service
+      - admin-service
+    networks:
+      - auto-rentals
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+    env_file:
+      - ./.env
+    environment:
+      SERVICE_NAME: auth-service
+      AUTH_SERVICE_PORT: ${AUTH_SERVICE_PORT:-4001}
+      AUTH_MONGODB_URI: mongodb://mongo:27017/auto_rentals_auth
+    ports:
+      - "${AUTH_SERVICE_PORT:-4001}:4001"
+    depends_on:
+      - mongo
+    networks:
+      - auto-rentals
+
+  vehicle-service:
+    build:
+      context: ./services/vehicle-service
+    env_file:
+      - ./.env
+    environment:
+      SERVICE_NAME: vehicle-service
+      VEHICLE_SERVICE_PORT: ${VEHICLE_SERVICE_PORT:-4002}
+      VEHICLE_MONGODB_URI: mongodb://mongo:27017/auto_rentals_vehicle
+    ports:
+      - "${VEHICLE_SERVICE_PORT:-4002}:4002"
+    depends_on:
+      - mongo
+    networks:
+      - auto-rentals
+
+  booking-service:
+    build:
+      context: ./services/booking-service
+    env_file:
+      - ./.env
+    environment:
+      SERVICE_NAME: booking-service
+      BOOKING_SERVICE_PORT: ${BOOKING_SERVICE_PORT:-4003}
+      BOOKING_MONGODB_URI: mongodb://mongo:27017/auto_rentals_booking
+      KAFKA_BROKERS: kafka:9092
+    ports:
+      - "${BOOKING_SERVICE_PORT:-4003}:4003"
+    depends_on:
+      - mongo
+      - kafka
+    networks:
+      - auto-rentals
+
+  payment-service:
+    build:
+      context: ./services/payment-service
+    env_file:
+      - ./.env
+    environment:
+      SERVICE_NAME: payment-service
+      PAYMENT_SERVICE_PORT: ${PAYMENT_SERVICE_PORT:-4004}
+      PAYMENT_MONGODB_URI: mongodb://mongo:27017/auto_rentals_payment
+    ports:
+      - "${PAYMENT_SERVICE_PORT:-4004}:4004"
+    depends_on:
+      - mongo
+    networks:
+      - auto-rentals
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+    env_file:
+      - ./.env
+    environment:
+      SERVICE_NAME: notification-service
+      NOTIFICATION_SERVICE_PORT: ${NOTIFICATION_SERVICE_PORT:-4005}
+      KAFKA_BROKERS: kafka:9092
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-4005}:4005"
+    depends_on:
+      - kafka
+    networks:
+      - auto-rentals
+
+  review-service:
+    build:
+      context: ./services/review-service
+    env_file:
+      - ./.env
+    environment:
+      SERVICE_NAME: review-service
+      REVIEW_SERVICE_PORT: ${REVIEW_SERVICE_PORT:-4006}
+      REVIEW_MONGODB_URI: mongodb://mongo:27017/auto_rentals_review
+    ports:
+      - "${REVIEW_SERVICE_PORT:-4006}:4006"
+    depends_on:
+      - mongo
+    networks:
+      - auto-rentals
+
+  admin-service:
+    build:
+      context: ./services/admin-service
+    env_file:
+      - ./.env
+    environment:
+      SERVICE_NAME: admin-service
+      ADMIN_SERVICE_PORT: ${ADMIN_SERVICE_PORT:-4007}
+      ADMIN_MONGODB_URI: mongodb://mongo:27017/auto_rentals_admin
+    ports:
+      - "${ADMIN_SERVICE_PORT:-4007}:4007"
+    depends_on:
+      - mongo
+    networks:
+      - auto-rentals
+
+  mongo:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - auto-rentals
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - auto-rentals
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper-data:/bitnami/zookeeper
+    networks:
+      - auto-rentals
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/bitnami/kafka
+    networks:
+      - auto-rentals
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.1
+    environment:
+      discovery.type: single-node
+      plugins.security.disabled: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    networks:
+      - auto-rentals
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - auto-rentals
+
+  grafana:
+    image: grafana/grafana:10.4.1
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - auto-rentals
+
+volumes:
+  mongo-data:
+  kafka-data:
+  zookeeper-data:
+  opensearch-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  auto-rentals:
+    driver: bridge
