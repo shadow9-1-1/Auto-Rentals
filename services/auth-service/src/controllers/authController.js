@@ -106,7 +106,30 @@ const login = async (req, res, next) => {
   }
 };
 
+const googleCallback = (req, res) => {
+  const user = req.user;
+  if (!user) {
+    return res.status(401).json({ error: "Google authentication failed" });
+  }
+
+  const accessToken = createAccessToken(user);
+  const refreshToken = createRefreshToken(user);
+
+  return res.status(200).json({
+    user: { id: user._id, email: user.email, role: user.role, roles: user.roles },
+    token: accessToken,
+    accessToken,
+    refreshToken
+  });
+};
+
+const googleFailure = (req, res) => {
+  res.status(401).json({ error: "Google authentication failed" });
+};
+
 module.exports = {
   register,
-  login
+  login,
+  googleCallback,
+  googleFailure
 };
