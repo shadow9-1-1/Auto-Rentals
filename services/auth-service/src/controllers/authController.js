@@ -43,7 +43,7 @@ const register = async (req, res, next) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ email: normalizedEmail, passwordHash, roles: ["user"] });
+    const user = await User.create({ email: normalizedEmail, passwordHash, roles: ["renter"] });
 
     const token = createAccessToken(user);
     res.status(201).json({

@@ -5,7 +5,7 @@ const morgan = require("morgan");
 const { createProxyMiddleware, fixRequestBody } = require("http-proxy-middleware");
 const rateLimit = require("express-rate-limit");
 
-const { allowPublicRoutes, authorizeRoles } = require("./middlewares/auth");
+const { allowPublicRoutes, authorizeRoles, requireRolesForMethods } = require("./middlewares/auth");
 
 const healthRouter = require("./routes/health");
 
@@ -64,11 +64,43 @@ const proxyFor = (target) =>
   });
 
 app.use("/auth", proxyFor(serviceUrls.auth));
-app.use("/vehicles", proxyFor(serviceUrls.vehicle));
-app.use("/bookings", proxyFor(serviceUrls.booking));
-app.use("/payments", proxyFor(serviceUrls.payment));
-app.use("/reviews", proxyFor(serviceUrls.review));
-app.use("/admin", authorizeRoles(["admin", "manager", "support"]), proxyFor(serviceUrls.admin));
+app.use(
+  "/vehicles",
+  requireRolesForMethods(
+    {
+      POST: ["owner", "admin"],
+      PUT: ["owner", "admin"],
+      PATCH: ["owner", "admin"],
+      DELETE: ["owner", "admin"]
+    },
+    ["renter", "owner", "admin"]
+  ),
+  proxyFor(serviceUrls.vehicle)
+);
+app.use(
+  "/bookings",
+  requireRolesForMethods(
+    {
+      POST: ["renter", "admin"],
+      PUT: ["renter", "admin"],
+      PATCH: ["renter", "admin"],
+      DELETE: ["renter", "admin"]
+    },
+    ["renter", "owner", "admin"]
+  ),
+  proxyFor(serviceUrls.booking)
+);
+app.use(
+  "/payments",
+  requireRolesForMethods({ POST: ["renter", "admin"] }, ["renter", "admin"]),
+  proxyFor(serviceUrls.payment)
+);
+app.use(
+  "/reviews",
+  requireRolesForMethods({ POST: ["renter", "admin"] }, ["renter", "owner", "admin"]),
+  proxyFor(serviceUrls.review)
+);
+app.use("/admin", authorizeRoles(["admin"]), proxyFor(serviceUrls.admin));
 
 app.use((req, res) => {
   res.status(404).json({ error: "Not found" });

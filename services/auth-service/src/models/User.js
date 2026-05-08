@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const roleValues = ["user", "admin", "manager", "support"];
+const roleValues = ["renter", "owner", "admin", "manager", "support", "user"];
 const oauthProviders = ["google", "github", "facebook", "apple"];
 
 const oauthProviderSchema = new mongoose.Schema(
@@ -50,7 +50,7 @@ const userSchema = new mongoose.Schema(
     roles: {
       type: [String],
       enum: roleValues,
-      default: ["user"],
+      default: ["renter"],
       validate: {
         validator: (roles) => Array.isArray(roles) && roles.length > 0,
         message: "At least one role is required"

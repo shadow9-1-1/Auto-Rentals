@@ -8,6 +8,11 @@ const extractToken = (req) => {
   return null;
 };
 
+const normalizeRoles = (roles) => {
+  const roleList = Array.isArray(roles) ? roles : [];
+  return roleList.map((role) => (role === "user" ? "renter" : role));
+};
+
 const requireAuth = (req, res, next) => {
   const token = extractToken(req);
   if (!token) {
@@ -21,11 +26,9 @@ const requireAuth = (req, res, next) => {
 
   try {
     const payload = jwt.verify(token, secret);
-    const roles = Array.isArray(payload.roles)
-      ? payload.roles
-      : payload.role
-        ? [payload.role]
-        : [];
+    const roles = normalizeRoles(
+      Array.isArray(payload.roles) ? payload.roles : payload.role ? [payload.role] : []
+    );
 
     req.user = {
       id: payload.sub,
@@ -40,11 +43,19 @@ const requireAuth = (req, res, next) => {
 };
 
 const authorizeRoles = (allowedRoles) => (req, res, next) => {
-  const roles = (req.user && req.user.roles) || [];
+  const roles = normalizeRoles((req.user && req.user.roles) || []);
   if (!roles.some((role) => allowedRoles.includes(role))) {
     return res.status(403).json({ error: "Forbidden" });
   }
   return next();
+};
+
+const requireRolesForMethods = (methodRoles, defaultRoles) => (req, res, next) => {
+  const roles = methodRoles[req.method.toUpperCase()] || defaultRoles;
+  if (!roles) {
+    return next();
+  }
+  return authorizeRoles(roles)(req, res, next);
 };
 
 const allowPublicRoutes = (paths) => (req, res, next) => {
@@ -56,5 +67,6 @@ const allowPublicRoutes = (paths) => (req, res, next) => {
 
 module.exports = {
   allowPublicRoutes,
-  authorizeRoles
+  authorizeRoles,
+  requireRolesForMethods
 };
