@@ -9,6 +9,12 @@ services:
     environment:
       SERVICE_NAME: api-gateway
       API_GATEWAY_PORT: ${API_GATEWAY_PORT:-4000}
+      AUTH_SERVICE_URL: http://localhost:4001
+      VEHICLE_SERVICE_URL: http://localhost:4002
+      BOOKING_SERVICE_URL: http://localhost:4003
+      PAYMENT_SERVICE_URL: http://localhost:4004
+      REVIEW_SERVICE_URL: http://localhost:4006
+      ADMIN_SERVICE_URL: http://localhost:4007
     ports:
       - "${API_GATEWAY_PORT:-4000}:4000"
     depends_on:
