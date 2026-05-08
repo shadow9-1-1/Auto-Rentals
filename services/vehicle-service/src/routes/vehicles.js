@@ -11,4 +11,19 @@ router.post(
 	vehicleController.createVehicle
 );
 
+router.get("/:id", vehicleController.getVehicle);
+
+router.put(
+  "/:id",
+  requireVehicleOwner,
+  vehicleController.upload.array("images", 10),
+  vehicleController.updateVehicle
+);
+
+router.delete(
+  "/:id",
+  requireVehicleOwner,
+  vehicleController.deleteVehicle
+);
+
 module.exports = router;
