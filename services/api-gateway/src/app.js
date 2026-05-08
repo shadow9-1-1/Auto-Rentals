@@ -5,6 +5,8 @@ const morgan = require("morgan");
 const { createProxyMiddleware, fixRequestBody } = require("http-proxy-middleware");
 const rateLimit = require("express-rate-limit");
 
+const { allowPublicRoutes, authorizeRoles } = require("./middlewares/auth");
+
 const healthRouter = require("./routes/health");
 
 const app = express();
@@ -31,6 +33,8 @@ const limiter = rateLimit({
 });
 
 app.use(limiter);
+
+app.use(allowPublicRoutes(["/health", "/auth"]));
 
 app.use((req, res, next) => {
   if (["POST", "PUT", "PATCH"].includes(req.method)) {
@@ -61,7 +65,7 @@ app.use("/vehicles", proxyFor(serviceUrls.vehicle));
 app.use("/bookings", proxyFor(serviceUrls.booking));
 app.use("/payments", proxyFor(serviceUrls.payment));
 app.use("/reviews", proxyFor(serviceUrls.review));
-app.use("/admin", proxyFor(serviceUrls.admin));
+app.use("/admin", authorizeRoles(["admin", "manager", "support"]), proxyFor(serviceUrls.admin));
 
 app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
