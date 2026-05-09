@@ -34,11 +34,11 @@ const parseJsonField = (value, fallback) => {
 };
 
 const validateCreateVehicle = (req, res, next) => {
-  require('fs').appendFileSync('validation-log.txt', `validateCreateVehicle called. body: ${JSON.stringify(req.body)}\n`);
   const body = req.body || {};
   const errors = [];
 
   const ownerId = req.user ? req.user.id : String(body.ownerId || "").trim();
+  const type = String(body.type || "").trim().toLowerCase();
   const make = String(body.make || "").trim();
   const model = String(body.model || "").trim();
   const year = Number(body.year);
@@ -46,7 +46,10 @@ const validateCreateVehicle = (req, res, next) => {
   const location = parseJsonField(body.location, body.location) || {};
   const availability = parseJsonField(body.availability, body.availability) || [];
 
+  const validTypes = ["sedan", "suv", "truck", "van", "coupe", "convertible", "hatchback", "wagon", "other"];
+
   if (!ownerId) errors.push("ownerId is required");
+  if (!type || !validTypes.includes(type)) errors.push(`type is required and must be one of: ${validTypes.join(", ")}`);
   if (!make) errors.push("make is required");
   if (!model) errors.push("model is required");
   if (!Number.isInteger(year) || year < 1980 || year > new Date().getFullYear() + 1) {
@@ -64,6 +67,7 @@ const validateCreateVehicle = (req, res, next) => {
   }
 
   req.body.ownerId = ownerId;
+  req.body.type = type;
   req.body.make = make;
   req.body.model = model;
   req.body.year = year;
@@ -76,8 +80,91 @@ const validateCreateVehicle = (req, res, next) => {
 
 const listVehicles = async (req, res, next) => {
   try {
-    const vehicles = await Vehicle.find().sort({ createdAt: -1 });
-    res.status(200).json({ items: vehicles });
+    const {
+      lat,
+      lng,
+      radius, // in kilometers
+      minPrice,
+      maxPrice,
+      startDate,
+      endDate,
+      type,
+      make,
+      page = 1,
+      limit = 10,
+      sortBy = "newest"
+    } = req.query;
+
+    const query = { status: "available" };
+
+    // 1. Geospatial Location Filter
+    if (lat && lng && radius) {
+      const radiusInRadians = Number(radius) / 6378.1; // Earth's radius in km
+      query["location.coordinates"] = {
+        $geoWithin: {
+          $centerSphere: [[Number(lng), Number(lat)], radiusInRadians]
+        }
+      };
+    }
+
+    // 2. Price Filter
+    if (minPrice || maxPrice) {
+      query["pricing.perDay"] = {};
+      if (minPrice) query["pricing.perDay"].$gte = Number(minPrice);
+      if (maxPrice) query["pricing.perDay"].$lte = Number(maxPrice);
+    }
+
+    // 3. Type & Make Filter
+    if (type) {
+      query.type = String(type).trim().toLowerCase();
+    }
+    if (make) {
+      // Case-insensitive regex search for make
+      query.make = { $regex: new RegExp(String(make).trim(), "i") };
+    }
+
+    // 4. Availability Date Filter
+    if (startDate && endDate) {
+      const searchStart = new Date(startDate);
+      const searchEnd = new Date(endDate);
+
+      // We want vehicles that DO NOT have an overlapping booked/blocked status
+      query.availability = {
+        $not: {
+          $elemMatch: {
+            status: { $in: ["booked", "blocked"] },
+            startDate: { $lt: searchEnd },
+            endDate: { $gt: searchStart }
+          }
+        }
+      };
+    }
+
+    // 5. Sorting Options
+    let sortObj = { createdAt: -1 };
+    if (sortBy === "price_asc") sortObj = { "pricing.perDay": 1 };
+    if (sortBy === "price_desc") sortObj = { "pricing.perDay": -1 };
+
+    // 6. Pagination
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    // Execute queries in parallel using .lean() for maximum performance (<300ms)
+    const [vehicles, totalItems] = await Promise.all([
+      Vehicle.find(query).sort(sortObj).skip(skip).limit(limitNum).lean(),
+      Vehicle.countDocuments(query)
+    ]);
+
+    res.status(200).json({
+      items: vehicles,
+      pagination: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / limitNum),
+        currentPage: pageNum,
+        limit: limitNum
+      }
+    });
   } catch (error) {
     next(error);
   }

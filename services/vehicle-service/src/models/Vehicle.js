@@ -60,6 +60,11 @@ const vehicleSchema = new mongoose.Schema(
       required: true,
       index: true
     },
+    type: {
+      type: String,
+      enum: ["sedan", "suv", "truck", "van", "coupe", "convertible", "hatchback", "wagon", "other"],
+      required: true
+    },
     make: {
       type: String,
       required: true,
@@ -171,5 +176,8 @@ const vehicleSchema = new mongoose.Schema(
 );
 
 vehicleSchema.index({ "location.coordinates": "2dsphere" });
+vehicleSchema.index({ status: 1, type: 1 });
+vehicleSchema.index({ "pricing.perDay": 1 });
+vehicleSchema.index({ make: 1 });
 
 module.exports = mongoose.model("Vehicle", vehicleSchema);
