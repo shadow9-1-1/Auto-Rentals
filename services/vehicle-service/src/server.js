@@ -5,10 +5,11 @@ require("dotenv").config();
 
 const app = require("./app");
 const connectDatabase = require("./config/database");
+const { connectRedis } = require("./config/redis");
 
 const port = process.env.VEHICLE_SERVICE_PORT || process.env.PORT || 4002;
 
-connectDatabase()
+Promise.all([connectDatabase(), connectRedis()])
   .then(() => {
     app.listen(port, () => {
       console.log(`Vehicle Service listening on port ${port}`);

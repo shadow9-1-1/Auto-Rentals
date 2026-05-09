@@ -3,6 +3,21 @@ const path = require("path");
 const multer = require("multer");
 
 const Vehicle = require("../models/Vehicle");
+const { redisClient } = require("../config/redis");
+
+const invalidateSearchCache = async () => {
+  try {
+    if (redisClient.isOpen) {
+      const keys = await redisClient.sMembers("vehicle:search_keys");
+      if (keys && keys.length > 0) {
+        await redisClient.del(keys);
+      }
+      await redisClient.del("vehicle:search_keys");
+    }
+  } catch (err) {
+    console.error("Redis invalidation error:", err);
+  }
+};
 
 const uploadDir = path.resolve(__dirname, "..", "uploads");
 fs.mkdirSync(uploadDir, { recursive: true });
@@ -150,13 +165,22 @@ const listVehicles = async (req, res, next) => {
     const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10)));
     const skip = (pageNum - 1) * limitNum;
 
+    // Redis Cache Check
+    const cacheKey = `vehicle:search:${Buffer.from(JSON.stringify(req.query)).toString("base64")}`;
+    if (redisClient.isOpen) {
+      const cachedResult = await redisClient.get(cacheKey);
+      if (cachedResult) {
+        return res.status(200).json(JSON.parse(cachedResult));
+      }
+    }
+
     // Execute queries in parallel using .lean() for maximum performance (<300ms)
     const [vehicles, totalItems] = await Promise.all([
       Vehicle.find(query).sort(sortObj).skip(skip).limit(limitNum).lean(),
       Vehicle.countDocuments(query)
     ]);
 
-    res.status(200).json({
+    const result = {
       items: vehicles,
       pagination: {
         totalItems,
@@ -164,7 +188,14 @@ const listVehicles = async (req, res, next) => {
         currentPage: pageNum,
         limit: limitNum
       }
-    });
+    };
+
+    if (redisClient.isOpen) {
+      await redisClient.setEx(cacheKey, 300, JSON.stringify(result)); // Cache for 5 minutes
+      await redisClient.sAdd("vehicle:search_keys", cacheKey);
+    }
+
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -192,6 +223,9 @@ const createVehicle = async (req, res, next) => {
       ownerId: req.user ? req.user.id : req.body.ownerId,
       images: [...bodyImages, ...uploadedImages]
     });
+
+    await invalidateSearchCache();
+
     res.status(201).json({ item: vehicle });
   } catch (error) {
     next(error);
@@ -200,10 +234,23 @@ const createVehicle = async (req, res, next) => {
 
 const getVehicle = async (req, res, next) => {
   try {
+    const cacheKey = `vehicle:${req.params.id}`;
+    if (redisClient.isOpen) {
+      const cachedVehicle = await redisClient.get(cacheKey);
+      if (cachedVehicle) {
+        return res.status(200).json({ item: JSON.parse(cachedVehicle) });
+      }
+    }
+
     const vehicle = await Vehicle.findById(req.params.id);
     if (!vehicle) {
       return res.status(404).json({ error: "Vehicle not found" });
     }
+
+    if (redisClient.isOpen) {
+      await redisClient.setEx(cacheKey, 900, JSON.stringify(vehicle)); // Cache for 15 minutes
+    }
+
     res.status(200).json({ item: vehicle });
   } catch (error) {
     next(error);
@@ -255,6 +302,11 @@ const updateVehicle = async (req, res, next) => {
       { new: true, runValidators: true }
     );
 
+    if (redisClient.isOpen) {
+      await redisClient.del(`vehicle:${vehicleId}`);
+    }
+    await invalidateSearchCache();
+
     res.status(200).json({ item: updatedVehicle });
   } catch (error) {
     next(error);
@@ -281,6 +333,11 @@ const deleteVehicle = async (req, res, next) => {
     // Soft delete: set status to unavailable
     vehicle.status = "unavailable";
     await vehicle.save();
+
+    if (redisClient.isOpen) {
+      await redisClient.del(`vehicle:${vehicleId}`);
+    }
+    await invalidateSearchCache();
 
     res.status(200).json({ status: "Vehicle soft deleted successfully", item: vehicle });
   } catch (error) {
