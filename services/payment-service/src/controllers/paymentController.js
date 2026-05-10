@@ -1,8 +1,11 @@
 const jwt = require("jsonwebtoken");
 const Payment = require("../models/Payment");
+const FailedEvent = require("../models/FailedEvent");
 const { createStripeClient } = require("../config/stripe");
+const { createHttpCircuitBreaker } = require("../utils/httpClient");
 
 const stripe = createStripeClient();
+const bookingServiceBreaker = createHttpCircuitBreaker();
 
 const createCheckoutSession = async (req, res, next) => {
   try {
@@ -77,21 +80,36 @@ const handleStripeWebhook = async (req, res) => {
         { status: "paid" }
       );
 
-      // Inform booking-service using a signed admin JWT
+      // Inform booking-service securely using circuit breaker with retry
       const bookingServiceUrl = process.env.BOOKING_SERVICE_URL || "http://booking-service:4003";
       const token = jwt.sign({ sub: "system", roles: ["admin"] }, process.env.JWT_SECRET, { expiresIn: "10m" });
 
-      await fetch(`${bookingServiceUrl}/bookings/${bookingId}/status`, {
-        method: "PATCH",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: "confirmed" })
-      });
+      try {
+        await bookingServiceBreaker.fire(
+          `${bookingServiceUrl}/bookings/${bookingId}/status`, 
+          {
+            method: "PATCH",
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ status: "confirmed" })
+          },
+          3, // 3 retries
+          1000 // 1s initial backoff
+        );
+      } catch (err) {
+        console.error("Booking update failed after retries. Saving fallback event.", err.message);
+        await FailedEvent.create({
+          eventType: "BOOKING_CONFIRMATION_FALLBACK",
+          targetUrl: `${bookingServiceUrl}/bookings/${bookingId}/status`,
+          payload: { bookingId, status: "confirmed" },
+          error: err.message
+        });
+      }
 
     } catch (err) {
-      console.error("Failed to update payment or booking", err);
+      console.error("Failed to process checkout.session.completed", err);
     }
   }
 
