@@ -108,6 +108,30 @@ const handleStripeWebhook = async (req, res) => {
         });
       }
 
+      // Emit Kafka event
+      const producer = req.app.locals.kafkaProducer;
+      if (producer) {
+        const topic = process.env.KAFKA_PAYMENT_TOPIC || "payment.events";
+        const payload = {
+          type: "payment.success",
+          data: {
+            bookingId,
+            providerPaymentId: session.id,
+            amount: session.amount_total / 100,
+            currency: session.currency
+          }
+        };
+
+        try {
+          await producer.send({
+            topic,
+            messages: [{ key: bookingId, value: JSON.stringify(payload) }]
+          });
+        } catch (kafkaErr) {
+          console.error("Failed to publish payment.success event", kafkaErr);
+        }
+      }
+
     } catch (err) {
       console.error("Failed to process checkout.session.completed", err);
     }

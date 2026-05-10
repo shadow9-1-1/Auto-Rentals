@@ -87,6 +87,7 @@ services:
       SERVICE_NAME: payment-service
       PAYMENT_SERVICE_PORT: ${PAYMENT_SERVICE_PORT:-4004}
       PAYMENT_MONGODB_URI: mongodb://mongo:27017/auto_rentals_payment
+      KAFKA_BROKERS: kafka:9092
     ports:
       - "${PAYMENT_SERVICE_PORT:-4004}:4004"
     depends_on:
