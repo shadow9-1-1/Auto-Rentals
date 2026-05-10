@@ -82,7 +82,66 @@ const createBooking = async (req, res, next) => {
   }
 };
 
+const updateBookingStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status, cancellationReason } = req.body;
+
+    if (!["confirmed", "cancelled"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status update. Only confirmed or cancelled are allowed." });
+    }
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    if (booking.status === status) {
+      return res.status(400).json({ error: `Booking is already ${status}` });
+    }
+
+    booking.status = status;
+    if (status === "cancelled" && cancellationReason) {
+      booking.cancellationReason = cancellationReason;
+    }
+
+    await booking.save();
+
+    const producer = req.app.locals.kafkaProducer;
+    if (producer) {
+      const topic = process.env.KAFKA_BOOKING_TOPIC || "booking.events";
+      const payload = {
+        type: `booking.${status}`,
+        data: {
+          id: booking._id.toString(),
+          userId: booking.renter?.userId,
+          vehicleId: booking.vehicle?.vehicleId,
+          status: booking.status,
+          startDate: booking.startDate,
+          endDate: booking.endDate,
+          pricing: booking.pricing,
+          cancellationReason: booking.cancellationReason
+        }
+      };
+
+      try {
+        await producer.send({
+          topic,
+          messages: [{ key: booking._id.toString(), value: JSON.stringify(payload) }]
+        });
+      } catch (error) {
+        console.error(`Failed to publish booking.${status} event`, error);
+      }
+    }
+
+    res.status(200).json({ item: booking });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listBookings,
-  createBooking
+  createBooking,
+  updateBookingStatus
 };
