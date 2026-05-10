@@ -10,6 +10,15 @@ const app = express();
 
 app.use(helmet());
 app.use(cors());
+
+// Webhook must be parsed as raw body
+const paymentController = require("./controllers/paymentController");
+app.post(
+  "/payments/webhook",
+  express.raw({ type: "application/json" }),
+  paymentController.handleStripeWebhook
+);
+
 app.use(express.json());
 app.use(morgan("dev"));
 

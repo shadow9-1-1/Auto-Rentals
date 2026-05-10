@@ -22,6 +22,24 @@ const serviceUrls = {
 
 app.use(helmet());
 app.use(cors());
+
+// Route Stripe webhooks directly to payment-service to preserve raw body and bypass auth
+app.use(
+  "/payments/webhook",
+  createProxyMiddleware({
+    target: serviceUrls.payment,
+    changeOrigin: true,
+    pathRewrite: (path, req) => req.originalUrl,
+    on: {
+      error: (err, req, res) => {
+        if (!res.headersSent) {
+          res.status(502).json({ error: "Upstream service unavailable" });
+        }
+      }
+    }
+  })
+);
+
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
 
