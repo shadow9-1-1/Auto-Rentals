@@ -5,6 +5,8 @@ require("dotenv").config();
 
 const app = require("./app");
 const { connectConsumer } = require("./config/kafka");
+const connectDatabase = require("./config/database");
+const { startRetryWorker } = require("./workers/retryWorker");
 const { handleBookingEvent, handlePaymentEvent } = require("./consumers/eventHandlers");
 
 const port = process.env.NOTIFICATION_SERVICE_PORT || process.env.PORT || 4005;
@@ -14,6 +16,8 @@ const PAYMENT_TOPIC = process.env.KAFKA_PAYMENT_TOPIC || "payment.events";
 
 const startServer = async () => {
   try {
+    await connectDatabase();
+
     const consumer = await connectConsumer();
     app.locals.kafkaConsumer = consumer;
 
@@ -36,6 +40,7 @@ const startServer = async () => {
     app.listen(port, () => {
       console.log(`Notification Service listening on port ${port}`);
       console.log(`Consuming events from: ${BOOKING_TOPIC}, ${PAYMENT_TOPIC}`);
+      startRetryWorker();
     });
   } catch (error) {
     console.error("Failed to start Notification Service", error);
