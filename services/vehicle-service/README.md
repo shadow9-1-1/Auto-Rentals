@@ -1,0 +1,10 @@
+# Vehicle Service
+
+Vehicle listing and availability microservice for the Auto Rentals platform.
+
+## Scripts
+- `npm run dev` - start with nodemon
+- `npm start` - start in production mode
+
+## Environment Variables
+Copy `.env.example` to `.env` and adjust as needed.

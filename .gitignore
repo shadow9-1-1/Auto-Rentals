@@ -1,0 +1,38 @@
+# Node.js
+node_modules/
+.pnpm-store/
+.yarn/
+.yarn-cache/
+.npm/
+
+# Logs
+logs/
+*.log
+
+# Env files
+.env
+.env.*
+
+# Build outputs
+/dist/
+/build/
+/.next/
+/out/
+/.turbo/
+
+# Coverage
+coverage/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Docker
+*.local
+
+# Misc
+*.pid
+*.seed
+*.pem
