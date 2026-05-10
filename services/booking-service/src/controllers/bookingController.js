@@ -11,7 +11,15 @@ const listBookings = async (req, res, next) => {
 
 const createBooking = async (req, res, next) => {
   try {
-    const { vehicle, startDate, endDate } = req.body;
+    const { vehicle, startDate, endDate, renter } = req.body;
+    
+    // Automatically set renter.userId if req.user is populated
+    if (req.user) {
+      req.body.renter = {
+        ...renter,
+        userId: req.user.id
+      };
+    }
 
     if (!vehicle || !vehicle.vehicleId) {
       return res.status(400).json({ error: "Vehicle information with vehicleId is required" });
@@ -94,6 +102,14 @@ const updateBookingStatus = async (req, res, next) => {
     const booking = await Booking.findById(id);
     if (!booking) {
       return res.status(404).json({ error: "Booking not found" });
+    }
+
+    // Verify ownership
+    const isOwner = req.user && req.user.id === booking.renter?.userId;
+    const isAdmin = req.user && req.user.roles.includes("admin");
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: "Not authorized to update this booking" });
     }
 
     if (booking.status === status) {
