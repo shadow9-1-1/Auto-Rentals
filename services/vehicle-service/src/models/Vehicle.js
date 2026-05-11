@@ -170,6 +170,50 @@ const vehicleSchema = new mongoose.Schema(
     availability: {
       type: [availabilitySchema],
       default: []
+    },
+    ratings: {
+      averageRating: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 5
+      },
+      totalReviews: {
+        type: Number,
+        default: 0,
+        min: 0
+      },
+      ratingDistribution: {
+        five: {
+          type: Number,
+          default: 0,
+          min: 0
+        },
+        four: {
+          type: Number,
+          default: 0,
+          min: 0
+        },
+        three: {
+          type: Number,
+          default: 0,
+          min: 0
+        },
+        two: {
+          type: Number,
+          default: 0,
+          min: 0
+        },
+        one: {
+          type: Number,
+          default: 0,
+          min: 0
+        }
+      },
+      lastUpdated: {
+        type: Date,
+        default: () => new Date()
+      }
     }
   },
   { timestamps: true }
@@ -179,5 +223,7 @@ vehicleSchema.index({ "location.coordinates": "2dsphere" });
 vehicleSchema.index({ status: 1, type: 1 });
 vehicleSchema.index({ "pricing.perDay": 1 });
 vehicleSchema.index({ make: 1 });
+vehicleSchema.index({ "ratings.averageRating": -1 });
+vehicleSchema.index({ "ratings.totalReviews": -1 });
 
 module.exports = mongoose.model("Vehicle", vehicleSchema);

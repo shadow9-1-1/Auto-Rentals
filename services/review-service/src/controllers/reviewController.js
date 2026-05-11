@@ -1,5 +1,6 @@
 const Review = require("../models/Review");
 const BookingRef = require("../models/BookingRef");
+const { updateVehicleRating } = require("../services/ratingService");
 
 const listReviews = async (req, res, next) => {
   try {
@@ -69,6 +70,12 @@ const createReview = async (req, res, next) => {
     };
 
     const review = await Review.create(reviewPayload);
+
+    // Update vehicle rating asynchronously (non-blocking)
+    updateVehicleRating(vehicleId).catch((err) => {
+      console.error(`Failed to update rating for vehicle ${vehicleId}:`, err);
+    });
+
     res.status(201).json({ item: review });
   } catch (error) {
     if (error && error.code === 11000) {
@@ -101,6 +108,10 @@ const updateReview = async (req, res, next) => {
       return res.status(403).json({ error: "You can only edit your own reviews" });
     }
 
+    // Track if rating changed to trigger update
+    const ratingChanged = req.body.rating !== undefined && req.body.rating !== review.rating;
+    const vehicleId = review.vehicleId;
+
     // Update allowed fields
     const updates = {};
 
@@ -123,6 +134,13 @@ const updateReview = async (req, res, next) => {
     // Apply updates
     Object.assign(review, updates);
     const updatedReview = await review.save();
+
+    // Update vehicle rating if rating changed (non-blocking)
+    if (ratingChanged) {
+      updateVehicleRating(vehicleId).catch((err) => {
+        console.error(`Failed to update rating for vehicle ${vehicleId}:`, err);
+      });
+    }
 
     res.status(200).json({ item: updatedReview });
   } catch (error) {
@@ -153,8 +171,183 @@ const deleteReview = async (req, res, next) => {
       return res.status(403).json({ error: "You can only delete your own reviews" });
     }
 
+    const vehicleId = review.vehicleId;
+
     await Review.deleteOne({ _id: reviewId });
+
+    // Update vehicle rating after deletion (non-blocking)
+    updateVehicleRating(vehicleId).catch((err) => {
+      console.error(`Failed to update rating for vehicle ${vehicleId}:`, err);
+    });
+
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const recalculateAllRatings = async (req, res, next) => {
+  try {
+    const { recalculateAllVehicleRatings } = require("../services/ratingService");
+
+    const results = await recalculateAllVehicleRatings();
+
+    const summary = {
+      total: results.length,
+      successful: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
+      details: results
+    };
+
+    res.status(200).json(summary);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getReviewStats = async (req, res, next) => {
+  try {
+    const stats = await Review.aggregate([
+      {
+        $match: { isPublished: true }
+      },
+      {
+        $facet: {
+          overview: [
+            {
+              $group: {
+                _id: null,
+                totalReviews: { $sum: 1 },
+                averageRating: { $avg: "$rating" },
+                minRating: { $min: "$rating" },
+                maxRating: { $max: "$rating" }
+              }
+            }
+          ],
+          ratingDistribution: [
+            {
+              $group: {
+                _id: "$rating",
+                count: { $sum: 1 }
+              }
+            },
+            {
+              $sort: { _id: -1 }
+            }
+          ],
+          topReviewedVehicles: [
+            {
+              $group: {
+                _id: "$vehicleId",
+                reviewCount: { $sum: 1 },
+                averageRating: { $avg: "$rating" }
+              }
+            },
+            {
+              $sort: { reviewCount: -1 }
+            },
+            {
+              $limit: 10
+            }
+          ]
+        }
+      }
+    ]);
+
+    const result = {
+      overview: stats[0].overview[0] || null,
+      ratingDistribution: stats[0].ratingDistribution || [],
+      topReviewedVehicles: stats[0].topReviewedVehicles || []
+    };
+
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getVehicleRatingDetails = async (req, res, next) => {
+  try {
+    const { vehicleId } = req.params;
+
+    if (!vehicleId) {
+      return res.status(400).json({ error: "vehicleId is required" });
+    }
+
+    const stats = await Review.aggregate([
+      {
+        $match: {
+          vehicleId: String(vehicleId),
+          isPublished: true
+        }
+      },
+      {
+        $facet: {
+          stats: [
+            {
+              $group: {
+                _id: "$vehicleId",
+                totalReviews: { $sum: 1 },
+                averageRating: { $avg: "$rating" },
+                medianRating: { $avg: "$rating" } // MongoDB doesn't have true median
+              }
+            }
+          ],
+          distribution: [
+            {
+              $group: {
+                _id: "$rating",
+                count: { $sum: 1 }
+              }
+            },
+            {
+              $sort: { _id: -1 }
+            }
+          ],
+          recentReviews: [
+            {
+              $sort: { createdAt: -1 }
+            },
+            {
+              $limit: 5
+            },
+            {
+              $project: {
+                reviewer: 1,
+                rating: 1,
+                title: 1,
+                comment: 1,
+                createdAt: 1
+              }
+            }
+          ]
+        }
+      }
+    ]);
+
+    if (!stats[0].stats[0]) {
+      return res.status(404).json({ error: "No reviews found for this vehicle" });
+    }
+
+    const distribution = {};
+    stats[0].distribution.forEach((item) => {
+      distribution[item._id] = item.count;
+    });
+
+    const result = {
+      vehicleId,
+      stats: stats[0].stats[0],
+      distribution: {
+        five: distribution[5] || 0,
+        four: distribution[4] || 0,
+        three: distribution[3] || 0,
+        two: distribution[2] || 0,
+        one: distribution[1] || 0
+      },
+      recentReviews: stats[0].recentReviews || []
+    };
+
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -164,5 +357,8 @@ module.exports = {
   listReviews,
   createReview,
   updateReview,
-  deleteReview
+  deleteReview,
+  recalculateAllRatings,
+  getReviewStats,
+  getVehicleRatingDetails
 };

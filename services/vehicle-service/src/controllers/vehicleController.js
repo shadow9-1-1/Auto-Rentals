@@ -345,12 +345,64 @@ const deleteVehicle = async (req, res, next) => {
   }
 };
 
+const getVehicleRatings = async (req, res, next) => {
+  try {
+    const vehicleId = req.params.id;
+
+    if (!vehicleId) {
+      return res.status(400).json({ error: "vehicleId is required" });
+    }
+
+    const vehicle = await Vehicle.findById(vehicleId).select("ratings").lean();
+    if (!vehicle) {
+      return res.status(404).json({ error: "Vehicle not found" });
+    }
+
+    const ratings = vehicle.ratings || {
+      averageRating: 0,
+      totalReviews: 0,
+      ratingDistribution: {
+        five: 0,
+        four: 0,
+        three: 0,
+        two: 0,
+        one: 0
+      },
+      lastUpdated: null
+    };
+
+    res.status(200).json({ item: ratings });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getTopRatedVehicles = async (req, res, next) => {
+  try {
+    const { limit = 10, minReviews = 5 } = req.query;
+
+    const topVehicles = await Vehicle.find({
+      "ratings.totalReviews": { $gte: Number(minReviews) }
+    })
+      .select("_id make model year type ratings pricing images")
+      .sort({ "ratings.averageRating": -1 })
+      .limit(Number(limit))
+      .lean();
+
+    res.status(200).json({ items: topVehicles });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listVehicles,
   getVehicle,
   createVehicle,
   updateVehicle,
   deleteVehicle,
+  getVehicleRatings,
+  getTopRatedVehicles,
   upload,
   validateCreateVehicle
 };
