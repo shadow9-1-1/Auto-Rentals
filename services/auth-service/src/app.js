@@ -6,6 +6,7 @@ const passport = require("passport");
 
 const healthRouter = require("./routes/health");
 const authRouter = require("./routes/auth");
+const adminUsersRouter = require("./routes/adminUsers");
 const { configurePassport } = require("./config/passport");
 
 const app = express();
@@ -19,6 +20,7 @@ app.use(morgan("dev"));
 app.use(passport.initialize());
 
 app.use("/health", healthRouter);
+app.use("/auth/admin/users", adminUsersRouter);
 app.use("/auth", authRouter);
 
 app.use((req, res) => {
