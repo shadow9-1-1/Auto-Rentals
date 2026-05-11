@@ -1,4 +1,4 @@
-# Auto Rentals Monorepo
+# Auto Rentals
 
 Scalable microservices-based Auto Rentals platform for a Software Architecture course project.
 
