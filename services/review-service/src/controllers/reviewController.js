@@ -78,7 +78,91 @@ const createReview = async (req, res, next) => {
   }
 };
 
+const updateReview = async (req, res, next) => {
+  try {
+    const reviewerUserId = req.user && req.user.id ? String(req.user.id) : "";
+    const reviewId = String(req.params.reviewId || "").trim();
+
+    if (!reviewerUserId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    if (!reviewId) {
+      return res.status(400).json({ error: "reviewId is required" });
+    }
+
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      return res.status(404).json({ error: "Review not found" });
+    }
+
+    // Verify ownership: only the reviewer can edit their review
+    if (String(review.reviewer && review.reviewer.userId) !== reviewerUserId) {
+      return res.status(403).json({ error: "You can only edit your own reviews" });
+    }
+
+    // Update allowed fields
+    const updates = {};
+
+    if (req.body.title !== undefined) {
+      updates.title = String(req.body.title).trim();
+    }
+
+    if (req.body.comment !== undefined) {
+      updates.comment = String(req.body.comment).trim();
+    }
+
+    if (req.body.rating !== undefined) {
+      const rating = Number(req.body.rating);
+      if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: "rating must be between 1 and 5" });
+      }
+      updates.rating = rating;
+    }
+
+    // Apply updates
+    Object.assign(review, updates);
+    const updatedReview = await review.save();
+
+    res.status(200).json({ item: updatedReview });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteReview = async (req, res, next) => {
+  try {
+    const reviewerUserId = req.user && req.user.id ? String(req.user.id) : "";
+    const reviewId = String(req.params.reviewId || "").trim();
+
+    if (!reviewerUserId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    if (!reviewId) {
+      return res.status(400).json({ error: "reviewId is required" });
+    }
+
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      return res.status(404).json({ error: "Review not found" });
+    }
+
+    // Verify ownership: only the reviewer can delete their review
+    if (String(review.reviewer && review.reviewer.userId) !== reviewerUserId) {
+      return res.status(403).json({ error: "You can only delete your own reviews" });
+    }
+
+    await Review.deleteOne({ _id: reviewId });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listReviews,
-  createReview
+  createReview,
+  updateReview,
+  deleteReview
 };

@@ -4,5 +4,7 @@ const requireReviewer = require("../middlewares/requireReviewer");
 
 router.get("/", reviewController.listReviews);
 router.post("/", requireReviewer, reviewController.createReview);
+router.put("/:reviewId", requireReviewer, reviewController.updateReview);
+router.delete("/:reviewId", requireReviewer, reviewController.deleteReview);
 
 module.exports = router;
