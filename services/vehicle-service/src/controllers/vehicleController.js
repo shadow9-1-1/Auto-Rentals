@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const multer = require("multer");
+const jwt = require("jsonwebtoken");
 
 const Vehicle = require("../models/Vehicle");
 const { redisClient } = require("../config/redis");
@@ -16,6 +17,32 @@ const invalidateSearchCache = async () => {
     }
   } catch (err) {
     console.error("Redis invalidation error:", err);
+  }
+};
+
+const isAdminRequest = (req) => {
+  const header = req.headers.authorization || "";
+  if (!header.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const token = header.slice(7);
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    return false;
+  }
+
+  try {
+    const payload = jwt.verify(token, secret);
+    const roles = Array.isArray(payload.roles)
+      ? payload.roles
+      : payload.role
+        ? [payload.role]
+        : [];
+    const normalizedRoles = roles.map((role) => (role === "user" ? "renter" : role));
+    return normalizedRoles.includes("admin");
+  } catch (error) {
+    return false;
   }
 };
 
@@ -251,7 +278,12 @@ const getVehicle = async (req, res, next) => {
     if (redisClient.isOpen) {
       const cachedVehicle = await redisClient.get(cacheKey);
       if (cachedVehicle) {
-        return res.status(200).json({ item: JSON.parse(cachedVehicle) });
+        const cachedItem = JSON.parse(cachedVehicle);
+        const moderationStatus = cachedItem.moderation && cachedItem.moderation.status;
+        if (moderationStatus && moderationStatus !== "approved" && !isAdminRequest(req)) {
+          return res.status(404).json({ error: "Vehicle not found" });
+        }
+        return res.status(200).json({ item: cachedItem });
       }
     }
 
@@ -260,7 +292,12 @@ const getVehicle = async (req, res, next) => {
       return res.status(404).json({ error: "Vehicle not found" });
     }
 
-    if (redisClient.isOpen) {
+    const moderationStatus = vehicle.moderation && vehicle.moderation.status;
+    if (moderationStatus && moderationStatus !== "approved" && !isAdminRequest(req)) {
+      return res.status(404).json({ error: "Vehicle not found" });
+    }
+
+    if (redisClient.isOpen && (!moderationStatus || moderationStatus === "approved")) {
       await redisClient.setEx(cacheKey, 900, JSON.stringify(vehicle)); // Cache for 15 minutes
     }
 
@@ -537,7 +574,13 @@ const approveVehicleListing = async (req, res, next) => {
     }
     await invalidateSearchCache();
 
-    res.status(200).json({ item: vehicle });
+    const appearsInSearch = await Vehicle.exists({
+      _id: vehicleId,
+      status: "available",
+      "moderation.status": "approved"
+    });
+
+    res.status(200).json({ item: vehicle, searchVisibility: { appearsInSearch: !!appearsInSearch } });
   } catch (error) {
     next(error);
   }
