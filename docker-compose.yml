@@ -104,10 +104,13 @@ services:
       SERVICE_NAME: notification-service
       NOTIFICATION_SERVICE_PORT: ${NOTIFICATION_SERVICE_PORT:-4005}
       KAFKA_BROKERS: kafka:9092
+      NOTIFICATION_MONGODB_URI: mongodb://mongo:27017/auto_rentals_notification
+      MONGODB_URI: mongodb://mongo:27017/auto_rentals_notification
     ports:
       - "${NOTIFICATION_SERVICE_PORT:-4005}:4005"
     depends_on:
       - kafka
+      - mongo
     networks:
       - auto-rentals
 
@@ -120,6 +123,8 @@ services:
       SERVICE_NAME: review-service
       REVIEW_SERVICE_PORT: ${REVIEW_SERVICE_PORT:-4006}
       REVIEW_MONGODB_URI: mongodb://mongo:27017/auto_rentals_review
+      BOOKING_MONGODB_URI: mongodb://mongo:27017/auto_rentals_booking
+      MONGODB_URI: mongodb://mongo:27017/auto_rentals_review
     ports:
       - "${REVIEW_SERVICE_PORT:-4006}:4006"
     depends_on:
