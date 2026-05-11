@@ -159,6 +159,43 @@ const vehicleSchema = new mongoose.Schema(
       enum: ["available", "unavailable", "maintenance"],
       default: "available"
     },
+    moderation: {
+      status: {
+        type: String,
+        enum: ["pending", "approved", "rejected", "removed"],
+        default: "pending"
+      },
+      reason: {
+        type: String,
+        trim: true
+      },
+      notes: {
+        type: String,
+        trim: true
+      },
+      updatedAt: {
+        type: Date,
+        default: () => new Date()
+      },
+      updatedBy: {
+        type: String,
+        trim: true
+      },
+      approvedAt: {
+        type: Date
+      },
+      approvedBy: {
+        type: String,
+        trim: true
+      },
+      removedAt: {
+        type: Date
+      },
+      removedBy: {
+        type: String,
+        trim: true
+      }
+    },
     features: {
       type: [String],
       default: []
@@ -225,5 +262,6 @@ vehicleSchema.index({ "pricing.perDay": 1 });
 vehicleSchema.index({ make: 1 });
 vehicleSchema.index({ "ratings.averageRating": -1 });
 vehicleSchema.index({ "ratings.totalReviews": -1 });
+vehicleSchema.index({ "moderation.status": 1, updatedAt: -1 });
 
 module.exports = mongoose.model("Vehicle", vehicleSchema);

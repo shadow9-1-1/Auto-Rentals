@@ -110,7 +110,10 @@ const listVehicles = async (req, res, next) => {
       sortBy = "newest"
     } = req.query;
 
-    const query = { status: "available" };
+    const query = {
+      status: "available",
+      $or: [{ "moderation.status": { $exists: false } }, { "moderation.status": "approved" }]
+    };
 
     // 1. Geospatial Location Filter
     if (lat && lng && radius) {
@@ -218,10 +221,20 @@ const createVehicle = async (req, res, next) => {
         ? parseJsonField(req.body.images, [])
         : [];
 
+    const isAdmin = req.user && Array.isArray(req.user.roles) && req.user.roles.includes("admin");
+    const moderation = {
+      status: isAdmin ? "approved" : "pending",
+      updatedAt: new Date(),
+      updatedBy: req.user ? req.user.id : undefined,
+      approvedAt: isAdmin ? new Date() : undefined,
+      approvedBy: isAdmin && req.user ? req.user.id : undefined
+    };
+
     const vehicle = await Vehicle.create({
       ...req.body,
       ownerId: req.user ? req.user.id : req.body.ownerId,
-      images: [...bodyImages, ...uploadedImages]
+      images: [...bodyImages, ...uploadedImages],
+      moderation
     });
 
     await invalidateSearchCache();
@@ -291,6 +304,8 @@ const updateVehicle = async (req, res, next) => {
 
     const updates = { ...req.body };
     delete updates.ownerId; // Prevent changing owner
+    delete updates.moderation; // Prevent owner updates to moderation
+    delete updates.ratings; // Prevent owner updates to ratings
 
     if (bodyImages !== undefined || uploadedImages.length > 0) {
       updates.images = [...(bodyImages || vehicle.images), ...uploadedImages];
@@ -395,6 +410,180 @@ const getTopRatedVehicles = async (req, res, next) => {
   }
 };
 
+const listAdminVehicles = async (req, res, next) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      moderationStatus,
+      ownerId,
+      search,
+      createdFrom,
+      createdTo,
+      updatedFrom,
+      updatedTo,
+      sortBy = "updated"
+    } = req.query;
+
+    const query = {};
+
+    if (status) {
+      query.status = String(status).trim();
+    }
+
+    if (moderationStatus) {
+      query["moderation.status"] = String(moderationStatus).trim();
+    }
+
+    if (ownerId) {
+      query.ownerId = String(ownerId).trim();
+    }
+
+    if (search) {
+      const regex = new RegExp(String(search).trim(), "i");
+      query.$or = [{ make: regex }, { model: regex }, { ownerId: regex }];
+    }
+
+    const createdRange = {};
+    if (createdFrom) {
+      const createdFromDate = new Date(createdFrom);
+      if (!Number.isNaN(createdFromDate.getTime())) {
+        createdRange.$gte = createdFromDate;
+      }
+    }
+    if (createdTo) {
+      const createdToDate = new Date(createdTo);
+      if (!Number.isNaN(createdToDate.getTime())) {
+        createdRange.$lte = createdToDate;
+      }
+    }
+    if (Object.keys(createdRange).length > 0) {
+      query.createdAt = createdRange;
+    }
+
+    const updatedRange = {};
+    if (updatedFrom) {
+      const updatedFromDate = new Date(updatedFrom);
+      if (!Number.isNaN(updatedFromDate.getTime())) {
+        updatedRange.$gte = updatedFromDate;
+      }
+    }
+    if (updatedTo) {
+      const updatedToDate = new Date(updatedTo);
+      if (!Number.isNaN(updatedToDate.getTime())) {
+        updatedRange.$lte = updatedToDate;
+      }
+    }
+    if (Object.keys(updatedRange).length > 0) {
+      query.updatedAt = updatedRange;
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    let sortObj = { updatedAt: -1 };
+    if (sortBy === "created") sortObj = { createdAt: -1 };
+    if (sortBy === "status") sortObj = { status: 1, updatedAt: -1 };
+    if (sortBy === "moderation") sortObj = { "moderation.status": 1, updatedAt: -1 };
+
+    const [vehicles, totalItems] = await Promise.all([
+      Vehicle.find(query).sort(sortObj).skip(skip).limit(limitNum).lean(),
+      Vehicle.countDocuments(query)
+    ]);
+
+    res.status(200).json({
+      items: vehicles,
+      pagination: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / limitNum),
+        currentPage: pageNum,
+        limit: limitNum
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const approveVehicleListing = async (req, res, next) => {
+  try {
+    const vehicleId = String(req.params.id || "").trim();
+    if (!vehicleId) {
+      return res.status(400).json({ error: "vehicleId is required" });
+    }
+
+    const now = new Date();
+    const updates = {
+      "moderation.status": "approved",
+      "moderation.updatedAt": now,
+      "moderation.updatedBy": req.user ? req.user.id : undefined,
+      "moderation.approvedAt": now,
+      "moderation.approvedBy": req.user ? req.user.id : undefined
+    };
+
+    if (req.body && req.body.notes) {
+      updates["moderation.notes"] = String(req.body.notes).trim();
+    }
+
+    const vehicle = await Vehicle.findByIdAndUpdate(vehicleId, { $set: updates }, { new: true });
+    if (!vehicle) {
+      return res.status(404).json({ error: "Vehicle not found" });
+    }
+
+    if (redisClient.isOpen) {
+      await redisClient.del(`vehicle:${vehicleId}`);
+    }
+    await invalidateSearchCache();
+
+    res.status(200).json({ item: vehicle });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const removeVehicleListing = async (req, res, next) => {
+  try {
+    const vehicleId = String(req.params.id || "").trim();
+    if (!vehicleId) {
+      return res.status(400).json({ error: "vehicleId is required" });
+    }
+
+    const now = new Date();
+    const updates = {
+      status: "unavailable",
+      "moderation.status": "removed",
+      "moderation.updatedAt": now,
+      "moderation.updatedBy": req.user ? req.user.id : undefined,
+      "moderation.removedAt": now,
+      "moderation.removedBy": req.user ? req.user.id : undefined
+    };
+
+    if (req.body && req.body.reason) {
+      updates["moderation.reason"] = String(req.body.reason).trim();
+    }
+
+    if (req.body && req.body.notes) {
+      updates["moderation.notes"] = String(req.body.notes).trim();
+    }
+
+    const vehicle = await Vehicle.findByIdAndUpdate(vehicleId, { $set: updates }, { new: true });
+    if (!vehicle) {
+      return res.status(404).json({ error: "Vehicle not found" });
+    }
+
+    if (redisClient.isOpen) {
+      await redisClient.del(`vehicle:${vehicleId}`);
+    }
+    await invalidateSearchCache();
+
+    res.status(200).json({ item: vehicle });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listVehicles,
   getVehicle,
@@ -403,6 +592,9 @@ module.exports = {
   deleteVehicle,
   getVehicleRatings,
   getTopRatedVehicles,
+  listAdminVehicles,
+  approveVehicleListing,
+  removeVehicleListing,
   upload,
   validateCreateVehicle
 };
