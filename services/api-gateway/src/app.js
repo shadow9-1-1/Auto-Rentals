@@ -4,6 +4,8 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const { createProxyMiddleware, fixRequestBody } = require("http-proxy-middleware");
 const rateLimit = require("express-rate-limit");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./docs/swagger");
 
 const { allowPublicRoutes, authorizeRoles, requireRolesForMethods } = require("./middlewares/auth");
 
@@ -42,6 +44,7 @@ app.use(
 
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -52,7 +55,7 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-app.use(allowPublicRoutes(["/health", "/auth"]));
+app.use(allowPublicRoutes(["/health", "/auth", "/docs"]));
 
 app.use((req, res, next) => {
   if (["POST", "PUT", "PATCH"].includes(req.method)) {

@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./docs/swagger");
 
 const healthRouter = require("./routes/health");
 const paymentRouter = require("./routes/payments");
@@ -21,6 +23,7 @@ app.post(
 
 app.use(express.json());
 app.use(morgan("dev"));
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
 
 app.use("/health", healthRouter);
 app.use("/payments", paymentRouter);
