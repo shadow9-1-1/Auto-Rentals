@@ -208,15 +208,15 @@ services:
     networks:
       - auto-rentals
 
-  # prometheus:
-  #   image: prom/prometheus:v2.52.0
-  #   volumes:
-  #     - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-  #     - prometheus-data:/prometheus
-  #   ports:
-  #     - "9090:9090"
-  #   networks:
-  #     - auto-rentals
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - auto-rentals
 
   grafana:
     image: grafana/grafana:10.4.1
@@ -232,7 +232,7 @@ volumes:
   kafka-data:
   zookeeper-data:
   opensearch-data:
-  # prometheus-data:
+  prometheus-data:
   grafana-data:
 
 networks:
