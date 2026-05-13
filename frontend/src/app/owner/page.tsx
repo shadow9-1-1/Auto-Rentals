@@ -18,24 +18,18 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-const MOCK_VEHICLES: Vehicle[] = [
-  { _id: "v1", owner: "owner1", make: "BMW", model: "M4", year: 2023, type: "Sports", fuelType: "petrol", transmission: "automatic", seats: 4, pricePerDay: 280, location: "New York", images: [], features: ["GPS", "Sunroof"], status: "available", averageRating: 4.9, reviewCount: 24, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { _id: "v2", owner: "owner1", make: "Audi", model: "Q7", year: 2022, type: "SUV", fuelType: "diesel", transmission: "automatic", seats: 7, pricePerDay: 210, location: "New York", images: [], features: ["Leather", "360°"], status: "available", averageRating: 4.7, reviewCount: 18, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { _id: "v3", owner: "owner1", make: "Mercedes", model: "C-Class", year: 2023, type: "Sedan", fuelType: "petrol", transmission: "automatic", seats: 5, pricePerDay: 185, location: "New York", images: [], features: ["GPS", "Heated"], status: "unavailable", averageRating: 4.6, reviewCount: 11, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-];
 
-const MOCK_BOOKINGS: Booking[] = [
-  { _id: "b1", vehicle: MOCK_VEHICLES[0], renter: { _id: "u1", name: "Alice Smith", email: "alice@test.com", role: "renter", createdAt: "" }, startDate: new Date(Date.now() + 86400000 * 2).toISOString(), endDate: new Date(Date.now() + 86400000 * 5).toISOString(), totalDays: 3, totalPrice: 840, status: "confirmed", paymentStatus: "paid", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { _id: "b2", vehicle: MOCK_VEHICLES[1], renter: { _id: "u2", name: "Bob Chen", email: "bob@test.com", role: "renter", createdAt: "" }, startDate: new Date(Date.now() - 86400000 * 5).toISOString(), endDate: new Date(Date.now() - 86400000 * 2).toISOString(), totalDays: 3, totalPrice: 630, status: "completed", paymentStatus: "paid", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-];
 
 function OwnerDashboardContent() {
-  const [vehicles, setVehicles] = useState<Vehicle[]>(MOCK_VEHICLES);
-  const [bookings, setBookings] = useState<Booking[]>(MOCK_BOOKINGS);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    vehicleService.list().then(r => setVehicles(r.data)).catch(() => {});
-    bookingService.list().then(setBookings).catch(() => {});
+    Promise.all([
+      vehicleService.list().then((r) => setVehicles(r.data)).catch(() => {}),
+      bookingService.list().then(setBookings).catch(() => {}),
+    ]).finally(() => setIsLoading(false));
   }, []);
 
   const revenue = bookings.filter(b => b.paymentStatus === "paid").reduce((s, b) => s + b.totalPrice, 0);

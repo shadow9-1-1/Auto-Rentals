@@ -6,6 +6,7 @@ import Link from "next/link";
 import { vehicleService, reviewService } from "@/services/api";
 import { Vehicle, Review } from "@/types";
 import { useAuth } from "@/context/AuthContext";
+import { Loader2, AlertCircle } from "lucide-react";
 import {
   Car,
   MapPin,
@@ -21,34 +22,7 @@ import {
 } from "lucide-react";
 import { format, differenceInDays, parseISO } from "date-fns";
 
-const MOCK_VEHICLE: Vehicle = {
-  _id: "1",
-  owner: "owner1",
-  make: "BMW",
-  model: "M4 Competition",
-  year: 2023,
-  type: "Sports",
-  fuelType: "petrol",
-  transmission: "automatic",
-  seats: 4,
-  pricePerDay: 280,
-  location: "New York, NY",
-  description:
-    "Experience the pinnacle of driving performance with the BMW M4 Competition. This meticulously maintained supercar delivers an exhilarating blend of power, precision, and luxury. Twin-turbocharged engine, adaptive M suspension, and iconic M design.",
-  images: [],
-  features: ["GPS Navigation", "Leather Seats", "Sunroof", "Bose Audio", "360° Camera", "Heated Seats", "Apple CarPlay", "Sport Mode"],
-  status: "available",
-  averageRating: 4.9,
-  reviewCount: 47,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-};
 
-const MOCK_REVIEWS: Review[] = [
-  { _id: "r1", vehicle: "1", reviewer: { _id: "u1", name: "Sarah K.", email: "", role: "renter", createdAt: "" }, rating: 5, comment: "Absolutely incredible car. Smooth, fast, and the interior is stunning. Will rent again!", createdAt: new Date(Date.now() - 86400000 * 5).toISOString() },
-  { _id: "r2", vehicle: "1", reviewer: { _id: "u2", name: "Mark J.", email: "", role: "renter", createdAt: "" }, rating: 5, comment: "Best rental experience ever. The car was spotless and performed beyond expectations.", createdAt: new Date(Date.now() - 86400000 * 12).toISOString() },
-  { _id: "r3", vehicle: "1", reviewer: { _id: "u3", name: "Elena M.", email: "", role: "renter", createdAt: "" }, rating: 4, comment: "Fantastic car, very responsive. Pickup was easy. Only minor issue was parking in NYC.", createdAt: new Date(Date.now() - 86400000 * 20).toISOString() },
-];
 
 export default function VehicleDetailPage() {
   const params = useParams();
@@ -56,9 +30,10 @@ export default function VehicleDetailPage() {
   const { isAuthenticated } = useAuth();
   const id = params?.id as string;
 
-  const [vehicle, setVehicle] = useState<Vehicle>(MOCK_VEHICLE);
-  const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS);
-  const [isLoading, setIsLoading] = useState(false);
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeImage, setActiveImage] = useState(0);
 
   const [startDate, setStartDate] = useState("");
@@ -66,14 +41,15 @@ export default function VehicleDetailPage() {
   const [bookingLoading, setBookingLoading] = useState(false);
 
   const days =
-    startDate && endDate
+    startDate && endDate && vehicle
       ? Math.max(0, differenceInDays(parseISO(endDate), parseISO(startDate)))
       : 0;
-  const totalPrice = days * vehicle.pricePerDay;
+  const totalPrice = vehicle ? days * vehicle.pricePerDay : 0;
 
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
+      setLoadError("");
       try {
         const [v, r] = await Promise.all([
           vehicleService.get(id),
@@ -82,7 +58,7 @@ export default function VehicleDetailPage() {
         setVehicle(v);
         setReviews(r);
       } catch {
-        // use mock
+        setLoadError("Could not load vehicle details. Please try again.");
       } finally {
         setIsLoading(false);
       }
@@ -106,6 +82,31 @@ export default function VehicleDetailPage() {
     "linear-gradient(135deg, #065f46, #0f766e)",
     "linear-gradient(135deg, #7c2d12, #9a3412)",
   ];
+
+  if (isLoading) {
+    return (
+      <div style={{ minHeight: "calc(100vh - 64px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <Loader2 size={48} color="#7c3aed" style={{ animation: "spin 1s linear infinite", margin: "0 auto 1rem" }} />
+          <p style={{ color: "var(--text-secondary)" }}>Loading vehicle details...</p>
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (loadError || !vehicle) {
+    return (
+      <div style={{ minHeight: "calc(100vh - 64px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <AlertCircle size={48} color="#ef4444" style={{ margin: "0 auto 1rem" }} />
+          <h2 style={{ color: "white", fontWeight: 700, marginBottom: "0.5rem" }}>Vehicle Not Found</h2>
+          <p style={{ color: "var(--text-secondary)", marginBottom: "1.5rem" }}>{loadError || "This vehicle does not exist."}</p>
+          <Link href="/vehicles" className="btn-primary" style={{ textDecoration: "none" }}>Back to Listings</Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "calc(100vh - 64px)", background: "var(--bg-primary)", padding: "2rem 1.5rem" }}>

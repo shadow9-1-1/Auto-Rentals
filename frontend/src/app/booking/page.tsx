@@ -19,24 +19,7 @@ import {
 import { format, differenceInDays, parseISO } from "date-fns";
 import Link from "next/link";
 
-const MOCK_VEHICLE: Vehicle = {
-  _id: "1",
-  owner: "owner1",
-  make: "BMW",
-  model: "M4 Competition",
-  year: 2023,
-  type: "Sports",
-  fuelType: "petrol",
-  transmission: "automatic",
-  seats: 4,
-  pricePerDay: 280,
-  location: "New York, NY",
-  images: [],
-  features: ["GPS", "Leather Seats", "Sunroof"],
-  status: "available",
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-};
+
 
 type Step = "summary" | "processing" | "confirm";
 
@@ -45,26 +28,50 @@ function BookingInner() {
   const router = useRouter();
   const { user } = useAuth();
 
-  const vehicleId = searchParams.get("vehicleId") || "1";
+  const vehicleId = searchParams.get("vehicleId") || "";
   const startDate = searchParams.get("startDate") || "";
   const endDate = searchParams.get("endDate") || "";
 
-  const [vehicle, setVehicle] = useState<Vehicle>(MOCK_VEHICLE);
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [vehicleLoading, setVehicleLoading] = useState(true);
   const [step, setStep] = useState<Step>("summary");
   const [booking, setBooking] = useState<Booking | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const days =
-    startDate && endDate
+    startDate && endDate && vehicle
       ? Math.max(1, differenceInDays(parseISO(endDate), parseISO(startDate)))
       : 1;
-  const totalPrice = days * vehicle.pricePerDay;
+  const totalPrice = vehicle ? days * vehicle.pricePerDay : 0;
   const serviceFee = Math.round(totalPrice * 0.05);
 
   useEffect(() => {
-    vehicleService.get(vehicleId).then(setVehicle).catch(() => {});
+    if (!vehicleId) return;
+    setVehicleLoading(true);
+    vehicleService
+      .get(vehicleId)
+      .then(setVehicle)
+      .catch(() => {})
+      .finally(() => setVehicleLoading(false));
   }, [vehicleId]);
+
+  if (vehicleLoading) {
+    return (
+      <div style={{ minHeight: "calc(100vh - 64px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: "48px", height: "48px", borderRadius: "50%", border: "3px solid rgba(124,58,237,0.3)", borderTopColor: "#7c3aed", animation: "spin 0.8s linear infinite" }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (!vehicle) {
+    return (
+      <div style={{ minHeight: "calc(100vh - 64px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ color: "var(--text-secondary)" }}>Vehicle not found. <a href="/vehicles" style={{ color: "#a78bfa" }}>Browse vehicles →</a></p>
+      </div>
+    );
+  }
 
   const handleConfirmBooking = async () => {
     setIsLoading(true);

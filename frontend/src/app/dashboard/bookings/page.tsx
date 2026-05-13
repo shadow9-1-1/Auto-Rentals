@@ -17,18 +17,19 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   cancelled: { label: "Cancelled", className: "badge-danger" },
 };
 
-const MOCK_BOOKINGS: Booking[] = [
-  { _id: "b1", vehicle: { _id: "v1", make: "BMW", model: "M4", year: 2023, type: "Sports", fuelType: "petrol", transmission: "automatic", seats: 4, pricePerDay: 280, location: "New York", images: [], features: [], status: "available", owner: "o1", createdAt: "", updatedAt: "" }, renter: { _id: "u1", name: "You", email: "", role: "renter", createdAt: "" }, startDate: new Date(Date.now() + 86400000 * 3).toISOString(), endDate: new Date(Date.now() + 86400000 * 6).toISOString(), totalDays: 3, totalPrice: 840, status: "confirmed", paymentStatus: "paid", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { _id: "b2", vehicle: { _id: "v2", make: "Tesla", model: "Model S", year: 2022, type: "Sedan", fuelType: "electric", transmission: "automatic", seats: 5, pricePerDay: 195, location: "Los Angeles", images: [], features: [], status: "available", owner: "o2", createdAt: "", updatedAt: "" }, renter: { _id: "u1", name: "You", email: "", role: "renter", createdAt: "" }, startDate: new Date(Date.now() - 86400000 * 10).toISOString(), endDate: new Date(Date.now() - 86400000 * 7).toISOString(), totalDays: 3, totalPrice: 585, status: "completed", paymentStatus: "paid", createdAt: new Date(Date.now() - 86400000 * 15).toISOString(), updatedAt: new Date().toISOString() },
-  { _id: "b3", vehicle: { _id: "v3", make: "Porsche", model: "Cayenne", year: 2023, type: "SUV", fuelType: "petrol", transmission: "automatic", seats: 5, pricePerDay: 310, location: "Miami", images: [], features: [], status: "available", owner: "o3", createdAt: "", updatedAt: "" }, renter: { _id: "u1", name: "You", email: "", role: "renter", createdAt: "" }, startDate: new Date(Date.now() - 86400000 * 30).toISOString(), endDate: new Date(Date.now() - 86400000 * 27).toISOString(), totalDays: 3, totalPrice: 930, status: "cancelled", paymentStatus: "refunded", createdAt: new Date(Date.now() - 86400000 * 35).toISOString(), updatedAt: new Date().toISOString() },
-];
+
 
 function BookingsContent() {
-  const [bookings, setBookings] = useState<Booking[]>(MOCK_BOOKINGS);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [filter, setFilter] = useState("all");
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    bookingService.list().then(setBookings).catch(() => setBookings(MOCK_BOOKINGS));
+    bookingService
+      .list()
+      .then(setBookings)
+      .catch(() => setBookings([]))
+      .finally(() => setIsLoading(false));
   }, []);
 
   const filtered = filter === "all" ? bookings : bookings.filter(b => b.status === filter);

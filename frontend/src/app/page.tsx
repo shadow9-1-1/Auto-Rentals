@@ -13,55 +13,10 @@ import {
   ArrowRight,
   ChevronRight,
   Check,
+  Loader2,
 } from "lucide-react";
-
-const FEATURED_VEHICLES = [
-  {
-    id: "1",
-    make: "BMW",
-    model: "M4 Competition",
-    type: "Sports",
-    pricePerDay: 280,
-    location: "New York",
-    images: [],
-    averageRating: 4.9,
-    reviewCount: 47,
-    features: ["GPS", "Leather", "Sunroof"],
-    fuelType: "petrol",
-    seats: 4,
-    gradient: "from-blue-600 to-violet-600",
-  },
-  {
-    id: "2",
-    make: "Tesla",
-    model: "Model S Plaid",
-    type: "Sedan",
-    pricePerDay: 195,
-    location: "Los Angeles",
-    images: [],
-    averageRating: 4.8,
-    reviewCount: 83,
-    features: ["Autopilot", "360° Camera", "WiFi"],
-    fuelType: "electric",
-    seats: 5,
-    gradient: "from-emerald-600 to-teal-600",
-  },
-  {
-    id: "3",
-    make: "Porsche",
-    model: "Cayenne GTS",
-    type: "SUV",
-    pricePerDay: 310,
-    location: "Miami",
-    images: [],
-    averageRating: 4.9,
-    reviewCount: 31,
-    features: ["Sport Mode", "Panoramic", "Bose"],
-    fuelType: "petrol",
-    seats: 5,
-    gradient: "from-amber-600 to-orange-600",
-  },
-];
+import { vehicleService } from "@/services/api";
+import { Vehicle } from "@/types";
 
 const STATS = [
   { label: "Vehicles Available", value: "2,400+", icon: Car },
@@ -97,14 +52,177 @@ const HOW_IT_WORKS = [
   },
 ];
 
+const GRADIENTS = [
+  "linear-gradient(135deg, #1e40af, #6d28d9)",
+  "linear-gradient(135deg, #065f46, #0f766e)",
+  "linear-gradient(135deg, #92400e, #9a3412)",
+];
+
+function FeaturedVehicleCard({ vehicle, index }: { vehicle: Vehicle; index: number }) {
+  const grad = GRADIENTS[index % GRADIENTS.length];
+  return (
+    <div
+      className={`card animate-fade-in-up stagger-${index + 1}`}
+      style={{ overflow: "hidden", cursor: "pointer", padding: 0 }}
+    >
+      <div
+        style={{
+          height: "180px",
+          backgroundImage: vehicle.images?.[0] ? `url(${vehicle.images[0]})` : grad,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+        }}
+      >
+        {!vehicle.images?.[0] && <Car size={64} color="rgba(255,255,255,0.2)" />}
+        <div
+          style={{
+            position: "absolute",
+            top: "0.75rem",
+            right: "0.75rem",
+            background: "rgba(0,0,0,0.4)",
+            borderRadius: "0.5rem",
+            padding: "0.25rem 0.5rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.25rem",
+          }}
+        >
+          <Star size={12} color="#f59e0b" fill="#f59e0b" />
+          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "white" }}>
+            {vehicle.averageRating?.toFixed(1) ?? "New"}
+          </span>
+          {vehicle.reviewCount != null && (
+            <span style={{ fontSize: "0.7rem", color: "#9ca3af" }}>
+              ({vehicle.reviewCount})
+            </span>
+          )}
+        </div>
+        <div style={{ position: "absolute", bottom: "0.75rem", left: "0.75rem" }}>
+          <span
+            className={`badge badge-${vehicle.fuelType === "electric" ? "success" : "info"}`}
+          >
+            {vehicle.fuelType}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ padding: "1.25rem" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: "0.75rem",
+          }}
+        >
+          <div>
+            <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "white" }}>
+              {vehicle.make} {vehicle.model}
+            </h3>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.25rem",
+                color: "#9ca3af",
+                fontSize: "0.8rem",
+                marginTop: "0.25rem",
+              }}
+            >
+              <MapPin size={11} />
+              {vehicle.location}
+            </div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <span style={{ fontSize: "1.25rem", fontWeight: 800, color: "#a78bfa" }}>
+              ${vehicle.pricePerDay}
+            </span>
+            <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>/day</span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: "0.375rem",
+            flexWrap: "wrap",
+            marginBottom: "1rem",
+          }}
+        >
+          {vehicle.features.slice(0, 3).map((f) => (
+            <span
+              key={f}
+              style={{
+                fontSize: "0.7rem",
+                color: "#9ca3af",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: "0.375rem",
+                padding: "0.2rem 0.5rem",
+              }}
+            >
+              {f}
+            </span>
+          ))}
+        </div>
+
+        <Link
+          href={`/vehicles/${vehicle._id}`}
+          className="btn-primary"
+          style={{
+            width: "100%",
+            justifyContent: "center",
+            textDecoration: "none",
+            display: "flex",
+          }}
+        >
+          Book Now
+          <ArrowRight size={14} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [searchLocation, setSearchLocation] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [year, setYear] = useState<number | null>(null);
 
+  const [featuredVehicles, setFeaturedVehicles] = useState<Vehicle[]>([]);
+  const [featuredLoading, setFeaturedLoading] = useState(true);
+
   useEffect(() => {
     setYear(new Date().getFullYear());
+  }, []);
+
+  // Fetch top-rated / featured vehicles from backend
+  useEffect(() => {
+    const fetchFeatured = async () => {
+      setFeaturedLoading(true);
+      try {
+        // Try the dedicated top-rated endpoint first
+        const topRated = await vehicleService.topRated(3);
+        if (topRated && topRated.length > 0) {
+          setFeaturedVehicles(topRated);
+          return;
+        }
+        // Fallback: list with rating sort
+        const listed = await vehicleService.list({ sortBy: "rating", limit: 3, page: 1 });
+        setFeaturedVehicles(listed.data);
+      } catch {
+        // Backend unavailable — leave empty to show skeleton
+        setFeaturedVehicles([]);
+      } finally {
+        setFeaturedLoading(false);
+      }
+    };
+    fetchFeatured();
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -408,166 +526,57 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-              gap: "1.5rem",
-            }}
-          >
-            {FEATURED_VEHICLES.map((vehicle, i) => (
-              <div
-                key={vehicle.id}
-                className={`card animate-fade-in-up stagger-${i + 1}`}
-                style={{ overflow: "hidden", cursor: "pointer", padding: 0 }}
-              >
-                {/* Card image placeholder */}
+          {featuredLoading ? (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                gap: "1.5rem",
+              }}
+            >
+              {[0, 1, 2].map((i) => (
                 <div
-                  style={{
-                    height: "180px",
-                    background: `linear-gradient(135deg, var(--tw-gradient-from, #2563eb), var(--tw-gradient-to, #7c3aed))`,
-                    backgroundImage: `linear-gradient(135deg, ${
-                      vehicle.gradient.includes("blue")
-                        ? "#1e40af, #6d28d9"
-                        : vehicle.gradient.includes("emerald")
-                        ? "#065f46, #0f766e"
-                        : "#92400e, #9a3412"
-                    })`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    position: "relative",
-                  }}
+                  key={i}
+                  className="card"
+                  style={{ padding: 0, overflow: "hidden" }}
                 >
-                  <Car size={64} color="rgba(255,255,255,0.2)" />
                   <div
                     style={{
-                      position: "absolute",
-                      top: "0.75rem",
-                      right: "0.75rem",
-                      background: "rgba(0,0,0,0.4)",
-                      borderRadius: "0.5rem",
-                      padding: "0.25rem 0.5rem",
+                      height: "180px",
+                      background: "rgba(255,255,255,0.04)",
                       display: "flex",
                       alignItems: "center",
-                      gap: "0.25rem",
+                      justifyContent: "center",
                     }}
                   >
-                    <Star size={12} color="#f59e0b" fill="#f59e0b" />
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        color: "white",
-                      }}
-                    >
-                      {vehicle.averageRating}
-                    </span>
-                    <span style={{ fontSize: "0.7rem", color: "#9ca3af" }}>
-                      ({vehicle.reviewCount})
-                    </span>
+                    <Loader2 size={32} color="#4b5563" style={{ animation: "spin 1s linear infinite" }} />
                   </div>
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: "0.75rem",
-                      left: "0.75rem",
-                    }}
-                  >
-                    <span
-                      className={`badge badge-${
-                        vehicle.fuelType === "electric" ? "success" : "info"
-                      }`}
-                    >
-                      {vehicle.fuelType}
-                    </span>
+                  <div style={{ padding: "1.25rem" }}>
+                    <div style={{ height: "16px", background: "rgba(255,255,255,0.06)", borderRadius: "0.5rem", marginBottom: "0.75rem", width: "60%" }} />
+                    <div style={{ height: "12px", background: "rgba(255,255,255,0.04)", borderRadius: "0.375rem", marginBottom: "1rem", width: "80%" }} />
+                    <div style={{ height: "36px", background: "rgba(124,58,237,0.15)", borderRadius: "0.75rem" }} />
                   </div>
                 </div>
-
-                <div style={{ padding: "1.25rem" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      marginBottom: "0.75rem",
-                    }}
-                  >
-                    <div>
-                      <h3
-                        style={{
-                          fontSize: "1rem",
-                          fontWeight: 700,
-                          color: "white",
-                        }}
-                      >
-                        {vehicle.make} {vehicle.model}
-                      </h3>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.25rem",
-                          color: "#9ca3af",
-                          fontSize: "0.8rem",
-                          marginTop: "0.25rem",
-                        }}
-                      >
-                        <MapPin size={11} />
-                        {vehicle.location}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <span
-                        style={{
-                          fontSize: "1.25rem",
-                          fontWeight: 800,
-                          color: "#a78bfa",
-                        }}
-                      >
-                        ${vehicle.pricePerDay}
-                      </span>
-                      <span
-                        style={{ fontSize: "0.75rem", color: "#9ca3af" }}
-                      >
-                        /day
-                      </span>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "0.375rem",
-                      flexWrap: "wrap",
-                      marginBottom: "1rem",
-                    }}
-                  >
-                    {vehicle.features.map((f) => (
-                      <span
-                        key={f}
-                        style={{
-                          fontSize: "0.7rem",
-                          color: "#9ca3af",
-                          background: "rgba(255,255,255,0.05)",
-                          border: "1px solid rgba(255,255,255,0.08)",
-                          borderRadius: "0.375rem",
-                          padding: "0.2rem 0.5rem",
-                        }}
-                      >
-                        {f}
-                      </span>
-                    ))}
-                  </div>
-
-                  <Link href={`/vehicles/${vehicle.id}`} className="btn-primary" style={{ width: "100%", justifyContent: "center", textDecoration: "none", display: "flex" }}>
-                    Book Now
-                    <ArrowRight size={14} />
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : featuredVehicles.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "3rem" }}>
+              <Car size={48} color="#4b5563" style={{ margin: "0 auto 1rem" }} />
+              <p style={{ color: "var(--text-secondary)" }}>No featured vehicles available. <Link href="/vehicles" style={{ color: "#a78bfa" }}>Browse all cars →</Link></p>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                gap: "1.5rem",
+              }}
+            >
+              {featuredVehicles.map((vehicle, i) => (
+                <FeaturedVehicleCard key={vehicle._id} vehicle={vehicle} index={i} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -717,10 +726,11 @@ export default function HomePage() {
         }}
       >
         <p>
-          © {year || "2024"} AutoRentals. Built with Next.js &
+          © {year || new Date().getFullYear()} AutoRentals. Built with Next.js &amp;
           Tailwind CSS.
         </p>
       </footer>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

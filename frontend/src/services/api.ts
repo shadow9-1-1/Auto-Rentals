@@ -70,6 +70,14 @@ export const vehicleService = {
     return data;
   },
 
+  // GET /vehicles/ratings/top?limit=N  — real backend endpoint
+  topRated: async (limit = 3) => {
+    const { data } = await apiClient.get<Vehicle[]>("/vehicles/ratings/top", {
+      params: { limit },
+    });
+    return data;
+  },
+
   create: async (formData: FormData) => {
     const { data } = await apiClient.post<Vehicle>("/vehicles", formData, {
       headers: { "Content-Type": "multipart/form-data" },
@@ -148,5 +156,35 @@ export const adminService = {
   getOverview: async () => {
     const { data } = await apiClient.get<AdminOverview>("/admin/overview");
     return data;
+  },
+};
+
+// =============================================
+// ADMIN USERS SERVICE  (routes through auth-service via gateway at /auth/admin/users)
+// =============================================
+export const adminUsersService = {
+  list: async () => {
+    const { data } = await apiClient.get<User[]>("/auth/admin/users");
+    return data;
+  },
+
+  suspend: async (userId: string) => {
+    const { data } = await apiClient.patch<User>(
+      `/auth/admin/users/${userId}/suspend`,
+      {}
+    );
+    return data;
+  },
+
+  updateRole: async (userId: string, role: string) => {
+    const { data } = await apiClient.patch<User>(
+      `/auth/admin/users/${userId}/roles`,
+      { role }
+    );
+    return data;
+  },
+
+  delete: async (userId: string) => {
+    await apiClient.delete(`/auth/admin/users/${userId}`);
   },
 };
