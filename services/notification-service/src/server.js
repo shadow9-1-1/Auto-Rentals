@@ -4,7 +4,7 @@ require("dotenv").config({ path: path.resolve(__dirname, "../../..", ".env") });
 require("dotenv").config();
 
 const app = require("./app");
-const { connectConsumer } = require("./config/kafka");
+const { connectConsumer, connectProducer } = require("./config/kafka");
 const connectDatabase = require("./config/database");
 const { startRetryWorker } = require("./workers/retryWorker");
 const { handleBookingEvent, handlePaymentEvent } = require("./consumers/eventHandlers");
@@ -21,6 +21,9 @@ const startServer = async () => {
     const consumer = await connectConsumer();
     app.locals.kafkaConsumer = consumer;
 
+    const producer = await connectProducer();
+    app.locals.kafkaProducer = producer;
+
     // Subscribe to both booking and payment event topics
     await consumer.subscribe({ topic: BOOKING_TOPIC, fromBeginning: false });
     await consumer.subscribe({ topic: PAYMENT_TOPIC, fromBeginning: false });
@@ -30,9 +33,9 @@ const startServer = async () => {
       eachMessage: async ({ topic, partition, message }) => {
         console.log(`Received message from topic '${topic}' [partition ${partition}]`);
         if (topic === BOOKING_TOPIC) {
-          await handleBookingEvent(message);
+          await handleBookingEvent(message, producer);
         } else if (topic === PAYMENT_TOPIC) {
-          await handlePaymentEvent(message);
+          await handlePaymentEvent(message, producer);
         }
       }
     });

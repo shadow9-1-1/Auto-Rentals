@@ -1,6 +1,24 @@
 const { sendEmail } = require("../services/emailService");
 
-const handleBookingEvent = async (message) => {
+const publishNotificationEvent = async (producer, type, data) => {
+  if (!producer) return;
+  const topic = process.env.KAFKA_NOTIFICATION_TOPIC || "notification.events";
+  const payload = {
+    type,
+    data,
+    timestamp: new Date().toISOString()
+  };
+  try {
+    await producer.send({
+      topic,
+      messages: [{ value: JSON.stringify(payload) }]
+    });
+  } catch (error) {
+    console.error(`Failed to publish ${type} event`, error);
+  }
+};
+
+const handleBookingEvent = async (message, producer) => {
   try {
     const payload = JSON.parse(message.value.toString());
     const { type, data } = payload;
@@ -12,9 +30,11 @@ const handleBookingEvent = async (message) => {
     switch (type) {
       case "booking.created":
         await sendEmail(to, "bookingConfirmation", data);
+        await publishNotificationEvent(producer, "notification.sent", { to, type: "bookingConfirmation" });
         break;
       case "booking.cancelled":
         await sendEmail(to, "cancellation", data);
+        await publishNotificationEvent(producer, "notification.sent", { to, type: "cancellation" });
         break;
       // Note: "booking.confirmed" is also emitted, but we use "payment.success" for the payment email.
       // If we wanted, we could send an email here too, but payment.success is specifically requested.
@@ -26,7 +46,7 @@ const handleBookingEvent = async (message) => {
   }
 };
 
-const handlePaymentEvent = async (message) => {
+const handlePaymentEvent = async (message, producer) => {
   try {
     const payload = JSON.parse(message.value.toString());
     const { type, data } = payload;
@@ -41,6 +61,7 @@ const handlePaymentEvent = async (message) => {
         currency: data.currency,
         userName: data.userName
       });
+      await publishNotificationEvent(producer, "notification.sent", { to, type: "paymentConfirmation" });
     } else {
       console.log(`Unhandled payment event type: ${type}`);
     }
