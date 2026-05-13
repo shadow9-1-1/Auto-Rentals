@@ -195,6 +195,27 @@ services:
     networks:
       - auto-rentals
 
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    depends_on:
+      - kafka
+    entrypoint: [ '/bin/sh', '-c' ]
+    command: |
+      "
+      echo -e 'Waiting for Kafka to be ready...'
+      kafka-topics --bootstrap-server kafka:9092 --list
+      
+      echo -e 'Creating kafka topics'
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic booking.events --replication-factor 1 --partitions 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic payment.events --replication-factor 1 --partitions 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic notification.events --replication-factor 1 --partitions 1
+      
+      echo -e 'Successfully created the following topics:'
+      kafka-topics --bootstrap-server kafka:9092 --list
+      "
+    networks:
+      - auto-rentals
+
   opensearch:
     image: opensearchproject/opensearch:2.11.1
     environment:
