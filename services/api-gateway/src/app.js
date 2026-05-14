@@ -55,7 +55,7 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-app.use(allowPublicRoutes(["/health", "/auth", "/docs"]));
+app.use(allowPublicRoutes(["/health", "/auth", "/docs", "/metrics"]));
 
 app.use((req, res, next) => {
   if (["POST", "PUT", "PATCH"].includes(req.method)) {

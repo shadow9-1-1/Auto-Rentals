@@ -50,7 +50,7 @@ export const authService = {
   },
 
   getGoogleOAuthUrl: () =>
-    `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"}/auth/google`,
+    `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/auth/google`,
 };
 
 // =============================================

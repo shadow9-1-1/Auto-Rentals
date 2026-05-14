@@ -224,12 +224,11 @@ const googleCallback = async (req, res, next) => {
     const refreshPayload = createRefreshToken(user);
     await persistRefreshToken(user._id, refreshPayload.token, refreshPayload.jti);
 
-    return res.status(200).json({
-      user: { id: user._id, email: user.email, role: user.role, roles: user.roles },
-      token: accessToken,
-      accessToken,
-      refreshToken: refreshPayload.token
-    });
+    const userData = { id: user._id, email: user.email, role: user.role, roles: user.roles };
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const redirectUrl = `${frontendUrl}/auth/google/callback?token=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshPayload.token)}&user=${encodeURIComponent(JSON.stringify(userData))}`;
+
+    return res.redirect(redirectUrl);
   } catch (error) {
     return next(error);
   }

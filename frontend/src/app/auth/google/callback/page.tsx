@@ -14,6 +14,7 @@ function GoogleCallbackInner() {
 
   useEffect(() => {
     const token = params.get("token");
+    const refreshToken = params.get("refreshToken");
     const userStr = params.get("user");
     const error = params.get("error");
 
@@ -25,6 +26,9 @@ function GoogleCallbackInner() {
     try {
       const user = JSON.parse(decodeURIComponent(userStr)) as User;
       setTokens(token, user);
+      if (refreshToken) {
+        localStorage.setItem("refreshToken", decodeURIComponent(refreshToken));
+      }
       setStatus("success");
       setTimeout(() => router.push("/dashboard"), 1000);
     } catch {

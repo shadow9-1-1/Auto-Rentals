@@ -1,6 +1,25 @@
 version: "3.9"
 
 services:
+  frontend:
+    build:
+      context: ./frontend
+    env_file:
+      - ./.env
+    environment:
+      NEXT_PUBLIC_API_URL: http://api-gateway:4000
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/.next:/app/.next
+    depends_on:
+      - api-gateway
+    networks:
+      - auto-rentals
+
   api-gateway:
     build:
       context: ./services/api-gateway
@@ -37,6 +56,8 @@ services:
       SERVICE_NAME: auth-service
       AUTH_SERVICE_PORT: ${AUTH_SERVICE_PORT:-4001}
       AUTH_MONGODB_URI: mongodb://mongo:27017/auto_rentals_auth
+      FRONTEND_URL: http://frontend:3000
+      GOOGLE_CALLBACK_URL: http://api-gateway:4000/auth/google/callback
     ports:
       - "${AUTH_SERVICE_PORT:-4001}:4001"
     depends_on:
