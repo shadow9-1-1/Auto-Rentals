@@ -225,7 +225,7 @@ const googleCallback = async (req, res, next) => {
     await persistRefreshToken(user._id, refreshPayload.token, refreshPayload.jti);
 
     const userData = { id: user._id, email: user.email, role: user.role, roles: user.roles };
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5000";
     const redirectUrl = `${frontendUrl}/auth/google/callback?token=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshPayload.token)}&user=${encodeURIComponent(JSON.stringify(userData))}`;
 
     return res.redirect(redirectUrl);

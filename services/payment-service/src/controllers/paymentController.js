@@ -30,8 +30,8 @@ const createCheckoutSession = async (req, res, next) => {
         },
       ],
       mode: "payment",
-      success_url: process.env.FRONTEND_SUCCESS_URL || "http://localhost:3000/success",
-      cancel_url: process.env.FRONTEND_CANCEL_URL || "http://localhost:3000/cancel",
+      success_url: process.env.FRONTEND_SUCCESS_URL || "http://localhost:5000/success",
+      cancel_url: process.env.FRONTEND_CANCEL_URL || "http://localhost:5000/cancel",
       client_reference_id: bookingId,
       metadata: {
         bookingId,

@@ -9,8 +9,9 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://api-gateway:4000
       NODE_ENV: development
+      PORT: 5000
     ports:
-      - "3000:3000"
+      - "5000:5000"
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
@@ -56,7 +57,7 @@ services:
       SERVICE_NAME: auth-service
       AUTH_SERVICE_PORT: ${AUTH_SERVICE_PORT:-4001}
       AUTH_MONGODB_URI: mongodb://mongo:27017/auto_rentals_auth
-      FRONTEND_URL: http://frontend:3000
+      FRONTEND_URL: http://frontend:5000
       GOOGLE_CALLBACK_URL: http://api-gateway:4000/auth/google/callback
     ports:
       - "${AUTH_SERVICE_PORT:-4001}:4001"
@@ -74,10 +75,12 @@ services:
       SERVICE_NAME: vehicle-service
       VEHICLE_SERVICE_PORT: ${VEHICLE_SERVICE_PORT:-4002}
       VEHICLE_MONGODB_URI: mongodb://mongo:27017/auto_rentals_vehicle
+      REDIS_URL: redis://redis:6379
     ports:
       - "${VEHICLE_SERVICE_PORT:-4002}:4002"
     depends_on:
       - mongo
+      - redis
     networks:
       - auto-rentals
 
