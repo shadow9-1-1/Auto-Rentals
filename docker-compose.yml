@@ -18,6 +18,7 @@ services:
       - ./frontend/.next:/app/.next
     depends_on:
       - api-gateway
+    restart: always
     networks:
       - auto-rentals
 
@@ -45,6 +46,7 @@ services:
       - notification-service
       - review-service
       - admin-service
+    restart: always
     networks:
       - auto-rentals
 
@@ -63,6 +65,7 @@ services:
       - "${AUTH_SERVICE_PORT:-4001}:4001"
     depends_on:
       - mongo
+    restart: always
     networks:
       - auto-rentals
 
@@ -81,6 +84,7 @@ services:
     depends_on:
       - mongo
       - redis
+    restart: always
     networks:
       - auto-rentals
 
@@ -101,6 +105,7 @@ services:
       - mongo
       - kafka
       - redis
+    restart: always
     networks:
       - auto-rentals
 
@@ -118,6 +123,7 @@ services:
       - "${PAYMENT_SERVICE_PORT:-4004}:4004"
     depends_on:
       - mongo
+    restart: always
     networks:
       - auto-rentals
 
@@ -137,6 +143,7 @@ services:
     depends_on:
       - kafka
       - mongo
+    restart: always
     networks:
       - auto-rentals
 
@@ -157,6 +164,7 @@ services:
     depends_on:
       - mongo
       - redis
+    restart: always
     networks:
       - auto-rentals
 
@@ -173,6 +181,7 @@ services:
       - "${ADMIN_SERVICE_PORT:-4007}:4007"
     depends_on:
       - mongo
+    restart: always
     networks:
       - auto-rentals
 
@@ -182,6 +191,7 @@ services:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    restart: always
     networks:
       - auto-rentals
 
@@ -189,6 +199,7 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    restart: always
     networks:
       - auto-rentals
 
@@ -201,6 +212,7 @@ services:
       - "2181:2181"
     volumes:
       - zookeeper-data:/var/lib/zookeeper/data
+    restart: always
     networks:
       - auto-rentals
 
@@ -220,6 +232,7 @@ services:
       - "9092:9092"
     volumes:
       - kafka-data:/var/lib/kafka/data
+    restart: always
     networks:
       - auto-rentals
 
@@ -229,16 +242,25 @@ services:
       - kafka
     entrypoint: [ '/bin/sh', '-c' ]
     command: |
-      "
-      echo -e 'Waiting for Kafka to be ready...'
-      kafka-topics --bootstrap-server kafka:9092 --list
+      /bin/sh -c "
+      echo 'Waiting for Kafka to be ready...'
+      MAX_RETRIES=30
+      COUNT=0
+      while ! kafka-topics --bootstrap-server kafka:9092 --list > /dev/null 2>&1; do
+        echo 'Kafka is not ready yet... waiting'
+        sleep 2
+        COUNT=$((COUNT+1))
+        if [ $COUNT -ge $MAX_RETRIES ]; then
+          echo 'Kafka failed to become ready in time'
+          exit 1
+        fi
+      done
       
-      echo -e 'Creating kafka topics'
+      echo 'Creating kafka topics'
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic booking.events --replication-factor 1 --partitions 1
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic payment.events --replication-factor 1 --partitions 1
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic notification.events --replication-factor 1 --partitions 1
       
-      echo -e 'Successfully created the following topics:'
       kafka-topics --bootstrap-server kafka:9092 --list
       "
     networks:
@@ -254,6 +276,7 @@ services:
       - "9200:9200"
     volumes:
       - opensearch-data:/usr/share/opensearch/data
+    restart: always
     networks:
       - auto-rentals
 
@@ -265,6 +288,7 @@ services:
       - prometheus-data:/prometheus
     ports:
       - "9090:9090"
+    restart: always
     networks:
       - auto-rentals
 
@@ -275,6 +299,7 @@ services:
     volumes:
       - grafana-data:/var/lib/grafana
       - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning
+    restart: always
     networks:
       - auto-rentals
 
@@ -288,6 +313,7 @@ services:
       - ./infrastructure/nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - api-gateway
+    restart: always
     networks:
       - auto-rentals
 
@@ -307,15 +333,16 @@ services:
       - /bin/sh
       - -c
       - |
-        sed -e "s/SMTP_SMARTHOST/$${SMTP_SMARTHOST}/g" \
-            -e "s/SMTP_FROM/$${SMTP_FROM}/g" \
-            -e "s/SMTP_AUTH_USERNAME/$${SMTP_AUTH_USERNAME}/g" \
-            -e "s/SMTP_AUTH_PASSWORD/$${SMTP_AUTH_PASSWORD}/g" \
-            -e "s/SMTP_REQUIRE_TLS/$${SMTP_REQUIRE_TLS}/g" \
+        sed -e "s/__SMTP_SMARTHOST__/$${SMTP_SMARTHOST}/g" \
+            -e "s/__SMTP_FROM__/$${SMTP_FROM}/g" \
+            -e "s/__SMTP_AUTH_USERNAME__/$${SMTP_AUTH_USERNAME}/g" \
+            -e "s/__SMTP_AUTH_PASSWORD__/$${SMTP_AUTH_PASSWORD}/g" \
+            -e "s/__SMTP_REQUIRE_TLS__/$${SMTP_REQUIRE_TLS}/g" \
             /etc/alertmanager/alertmanager.yml.tmpl > /etc/alertmanager/alertmanager.yml && \
         /bin/alertmanager --config.file=/etc/alertmanager/alertmanager.yml --storage.path=/alertmanager
     ports:
       - "9093:9093"
+    restart: always
     networks:
       - auto-rentals
 
