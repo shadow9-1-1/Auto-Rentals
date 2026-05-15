@@ -1,10 +1,39 @@
 const Review = require("../models/Review");
 const BookingRef = require("../models/BookingRef");
 const { updateVehicleRating } = require("../services/ratingService");
+const { redisClient } = require("../config/redis");
+
+const invalidateReviewCache = async (vehicleId = null) => {
+  try {
+    if (redisClient.isOpen) {
+      if (vehicleId) {
+        await redisClient.del(`review:vehicle:${vehicleId}`);
+      }
+      const keys = await redisClient.sMembers("review:cache_keys");
+      if (keys && keys.length > 0) {
+        await redisClient.del(keys);
+      }
+      await redisClient.del("review:cache_keys");
+    }
+  } catch (err) {
+    console.error("Redis invalidation error:", err);
+  }
+};
 
 const listReviews = async (req, res, next) => {
   try {
+    if (redisClient.isOpen) {
+      const cached = await redisClient.get("review:list");
+      if (cached) return res.status(200).json({ items: JSON.parse(cached) });
+    }
+
     const reviews = await Review.find().sort({ createdAt: -1 });
+
+    if (redisClient.isOpen) {
+      await redisClient.setEx("review:list", 300, JSON.stringify(reviews));
+      await redisClient.sAdd("review:cache_keys", "review:list");
+    }
+
     res.status(200).json({ items: reviews });
   } catch (error) {
     next(error);
@@ -76,6 +105,8 @@ const createReview = async (req, res, next) => {
       console.error(`Failed to update rating for vehicle ${vehicleId}:`, err);
     });
 
+    await invalidateReviewCache(vehicleId);
+
     res.status(201).json({ item: review });
   } catch (error) {
     if (error && error.code === 11000) {
@@ -142,6 +173,8 @@ const updateReview = async (req, res, next) => {
       });
     }
 
+    await invalidateReviewCache(vehicleId);
+
     res.status(200).json({ item: updatedReview });
   } catch (error) {
     next(error);
@@ -180,6 +213,8 @@ const deleteReview = async (req, res, next) => {
       console.error(`Failed to update rating for vehicle ${vehicleId}:`, err);
     });
 
+    await invalidateReviewCache(vehicleId);
+
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -199,6 +234,8 @@ const recalculateAllRatings = async (req, res, next) => {
       details: results
     };
 
+    await invalidateReviewCache();
+
     res.status(200).json(summary);
   } catch (error) {
     next(error);
@@ -207,6 +244,11 @@ const recalculateAllRatings = async (req, res, next) => {
 
 const getReviewStats = async (req, res, next) => {
   try {
+    if (redisClient.isOpen) {
+      const cached = await redisClient.get("review:stats");
+      if (cached) return res.status(200).json(JSON.parse(cached));
+    }
+
     const stats = await Review.aggregate([
       {
         $match: { isPublished: true }
@@ -260,6 +302,11 @@ const getReviewStats = async (req, res, next) => {
       topReviewedVehicles: stats[0].topReviewedVehicles || []
     };
 
+    if (redisClient.isOpen) {
+      await redisClient.setEx("review:stats", 300, JSON.stringify(result));
+      await redisClient.sAdd("review:cache_keys", "review:stats");
+    }
+
     res.status(200).json(result);
   } catch (error) {
     next(error);
@@ -272,6 +319,12 @@ const getVehicleRatingDetails = async (req, res, next) => {
 
     if (!vehicleId) {
       return res.status(400).json({ error: "vehicleId is required" });
+    }
+
+    const cacheKey = `review:vehicle:${vehicleId}`;
+    if (redisClient.isOpen) {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) return res.status(200).json(JSON.parse(cached));
     }
 
     const stats = await Review.aggregate([
@@ -346,6 +399,10 @@ const getVehicleRatingDetails = async (req, res, next) => {
       },
       recentReviews: stats[0].recentReviews || []
     };
+
+    if (redisClient.isOpen) {
+      await redisClient.setEx(cacheKey, 300, JSON.stringify(result));
+    }
 
     res.status(200).json(result);
   } catch (error) {

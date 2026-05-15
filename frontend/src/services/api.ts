@@ -58,38 +58,44 @@ export const authService = {
 // =============================================
 export const vehicleService = {
   list: async (filters?: VehicleFilters) => {
-    const { data } = await apiClient.get<PaginatedResponse<Vehicle>>(
+    const { data } = await apiClient.get<any>(
       "/vehicles",
       { params: filters }
     );
-    return data;
+    return {
+      data: data.items || [],
+      total: data.pagination?.totalItems || 0,
+      page: data.pagination?.currentPage || 1,
+      totalPages: data.pagination?.totalPages || 1,
+      limit: data.pagination?.limit || 12,
+    } as PaginatedResponse<Vehicle>;
   },
 
   get: async (id: string) => {
-    const { data } = await apiClient.get<Vehicle>(`/vehicles/${id}`);
-    return data;
+    const { data } = await apiClient.get<any>(`/vehicles/${id}`);
+    return data.item || data;
   },
 
   // GET /vehicles/ratings/top?limit=N  — real backend endpoint
   topRated: async (limit = 3) => {
-    const { data } = await apiClient.get<Vehicle[]>("/vehicles/ratings/top", {
+    const { data } = await apiClient.get<any>("/vehicles/ratings/top", {
       params: { limit },
     });
-    return data;
+    return data.items || data;
   },
 
   create: async (formData: FormData) => {
-    const { data } = await apiClient.post<Vehicle>("/vehicles", formData, {
+    const { data } = await apiClient.post<any>("/vehicles", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
-    return data;
+    return data.item || data;
   },
 
   update: async (id: string, formData: FormData) => {
-    const { data } = await apiClient.put<Vehicle>(`/vehicles/${id}`, formData, {
+    const { data } = await apiClient.put<any>(`/vehicles/${id}`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
-    return data;
+    return data.item || data;
   },
 
   delete: async (id: string) => {
@@ -102,20 +108,20 @@ export const vehicleService = {
 // =============================================
 export const bookingService = {
   list: async () => {
-    const { data } = await apiClient.get<Booking[]>("/bookings");
-    return data;
+    const { data } = await apiClient.get<any>("/bookings");
+    return data.items || [];
   },
 
   create: async (payload: CreateBookingPayload) => {
-    const { data } = await apiClient.post<Booking>("/bookings", payload);
-    return data;
+    const { data } = await apiClient.post<any>("/bookings", payload);
+    return data.item || data;
   },
 
   updateStatus: async (id: string, status: string) => {
-    const { data } = await apiClient.patch<Booking>(`/bookings/${id}/status`, {
+    const { data } = await apiClient.patch<any>(`/bookings/${id}/status`, {
       status,
     });
-    return data;
+    return data.item || data;
   },
 };
 
@@ -137,15 +143,15 @@ export const paymentService = {
 // =============================================
 export const reviewService = {
   list: async (vehicleId?: string) => {
-    const { data } = await apiClient.get<Review[]>("/reviews", {
+    const { data } = await apiClient.get<any>("/reviews", {
       params: vehicleId ? { vehicleId } : undefined,
     });
-    return data;
+    return data.items || [];
   },
 
   create: async (payload: CreateReviewPayload) => {
-    const { data } = await apiClient.post<Review>("/reviews", payload);
-    return data;
+    const { data } = await apiClient.post<any>("/reviews", payload);
+    return data.item || data;
   },
 };
 
@@ -164,24 +170,24 @@ export const adminService = {
 // =============================================
 export const adminUsersService = {
   list: async () => {
-    const { data } = await apiClient.get<User[]>("/auth/admin/users");
-    return data;
+    const { data } = await apiClient.get<any>("/auth/admin/users");
+    return data.items || [];
   },
 
   suspend: async (userId: string) => {
-    const { data } = await apiClient.patch<User>(
+    const { data } = await apiClient.patch<any>(
       `/auth/admin/users/${userId}/suspend`,
       {}
     );
-    return data;
+    return data.item || data;
   },
 
   updateRole: async (userId: string, role: string) => {
-    const { data } = await apiClient.patch<User>(
+    const { data } = await apiClient.patch<any>(
       `/auth/admin/users/${userId}/roles`,
       { role }
     );
-    return data;
+    return data.item || data;
   },
 
   delete: async (userId: string) => {

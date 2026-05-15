@@ -1,8 +1,34 @@
 const Booking = require("../models/Booking");
+const { redisClient } = require("../config/redis");
+
+const invalidateBookingCache = async () => {
+  try {
+    if (redisClient.isOpen) {
+      const keys = await redisClient.sMembers("booking:cache_keys");
+      if (keys && keys.length > 0) {
+        await redisClient.del(keys);
+      }
+      await redisClient.del("booking:cache_keys");
+    }
+  } catch (err) {
+    console.error("Redis invalidation error:", err);
+  }
+};
 
 const listBookings = async (req, res, next) => {
   try {
+    if (redisClient.isOpen) {
+      const cached = await redisClient.get("booking:list");
+      if (cached) return res.status(200).json({ items: JSON.parse(cached) });
+    }
+
     const bookings = await Booking.find().sort({ createdAt: -1 });
+
+    if (redisClient.isOpen) {
+      await redisClient.setEx("booking:list", 300, JSON.stringify(bookings));
+      await redisClient.sAdd("booking:cache_keys", "booking:list");
+    }
+
     res.status(200).json({ items: bookings });
   } catch (error) {
     next(error);
@@ -81,6 +107,8 @@ const createBooking = async (req, res, next) => {
       }
     }
 
+    await invalidateBookingCache();
+
     res.status(201).json({ item: booking });
   } catch (error) {
     if (error.name === "ValidationError") {
@@ -149,6 +177,8 @@ const updateBookingStatus = async (req, res, next) => {
         console.error(`Failed to publish booking.${status} event`, error);
       }
     }
+
+    await invalidateBookingCache();
 
     res.status(200).json({ item: booking });
   } catch (error) {
@@ -263,12 +293,20 @@ const listBookingActivity = async (req, res, next) => {
     if (sortBy === "end") sortObj = { endDate: -1 };
     if (sortBy === "status") sortObj = { status: 1, createdAt: -1 };
 
+    const cacheKey = `booking:activity:${Buffer.from(JSON.stringify(req.query)).toString("base64")}`;
+    if (redisClient.isOpen) {
+      const cachedResult = await redisClient.get(cacheKey);
+      if (cachedResult) {
+        return res.status(200).json(JSON.parse(cachedResult));
+      }
+    }
+
     const [bookings, totalItems] = await Promise.all([
       Booking.find(query).sort(sortObj).skip(skip).limit(limitNum).lean(),
       Booking.countDocuments(query)
     ]);
 
-    res.status(200).json({
+    const result = {
       items: bookings,
       pagination: {
         totalItems,
@@ -276,7 +314,14 @@ const listBookingActivity = async (req, res, next) => {
         currentPage: pageNum,
         limit: limitNum
       }
-    });
+    };
+
+    if (redisClient.isOpen) {
+      await redisClient.setEx(cacheKey, 300, JSON.stringify(result));
+      await redisClient.sAdd("booking:cache_keys", cacheKey);
+    }
+
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -284,6 +329,11 @@ const listBookingActivity = async (req, res, next) => {
 
 const getBookingStats = async (req, res, next) => {
   try {
+    if (redisClient.isOpen) {
+      const cached = await redisClient.get("booking:stats");
+      if (cached) return res.status(200).json(JSON.parse(cached));
+    }
+
     const stats = await Booking.aggregate([
       {
         $facet: {
@@ -340,12 +390,19 @@ const getBookingStats = async (req, res, next) => {
       averageBookingValue: 0
     };
 
-    res.status(200).json({
+    const result = {
       overview,
       statusBreakdown: (stats[0] && stats[0].statusBreakdown) || [],
       paymentBreakdown: (stats[0] && stats[0].paymentBreakdown) || [],
       recentBookings: (stats[0] && stats[0].recentBookings) || []
-    });
+    };
+
+    if (redisClient.isOpen) {
+      await redisClient.setEx("booking:stats", 300, JSON.stringify(result));
+      await redisClient.sAdd("booking:cache_keys", "booking:stats");
+    }
+
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -406,6 +463,8 @@ const cancelBookingAdmin = async (req, res, next) => {
         console.error("Failed to publish booking.cancelled event", error);
       }
     }
+
+    await invalidateBookingCache();
 
     res.status(200).json({ item: booking });
   } catch (error) {

@@ -6,12 +6,14 @@ require("dotenv").config();
 const app = require("./app");
 const connectDatabase = require("./config/database");
 const { connectProducer } = require("./config/kafka");
+const { connectRedis } = require("./config/redis");
 
 const port = process.env.BOOKING_SERVICE_PORT || process.env.PORT || 4003;
 
 const startServer = async () => {
   try {
     await connectDatabase();
+    await connectRedis();
     const producer = await connectProducer();
     app.locals.kafkaProducer = producer;
 

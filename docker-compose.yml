@@ -94,11 +94,13 @@ services:
       BOOKING_SERVICE_PORT: ${BOOKING_SERVICE_PORT:-4003}
       BOOKING_MONGODB_URI: mongodb://mongo:27017/auto_rentals_booking
       KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
     ports:
       - "${BOOKING_SERVICE_PORT:-4003}:4003"
     depends_on:
       - mongo
       - kafka
+      - redis
     networks:
       - auto-rentals
 
@@ -149,10 +151,12 @@ services:
       REVIEW_MONGODB_URI: mongodb://mongo:27017/auto_rentals_review
       BOOKING_MONGODB_URI: mongodb://mongo:27017/auto_rentals_booking
       MONGODB_URI: mongodb://mongo:27017/auto_rentals_review
+      REDIS_URL: redis://redis:6379
     ports:
       - "${REVIEW_SERVICE_PORT:-4006}:4006"
     depends_on:
       - mongo
+      - redis
     networks:
       - auto-rentals
 
