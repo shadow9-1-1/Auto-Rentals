@@ -29,7 +29,7 @@ const startServer = async () => {
     await consumer.run({
       eachMessage: async ({ topic, message }) => {
         if (topic === PAYMENT_TOPIC) {
-          await handlePaymentEvent(message);
+          await handlePaymentEvent(message, producer);
         }
       }
     });

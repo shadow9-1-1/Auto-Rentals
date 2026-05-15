@@ -28,7 +28,7 @@ const startServer = async () => {
     await consumer.run({
       eachMessage: async ({ topic, message }) => {
         if (topic === BOOKING_TOPIC) {
-          await handleBookingEvent(message);
+          await handleBookingEvent(message, producer);
         }
       }
     });

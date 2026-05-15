@@ -18,9 +18,12 @@ const invalidateReviewCache = async (vehicleId = null) => {
   }
 };
 
-const handleBookingEvent = async (message) => {
+const DeadLetterEvent = require("../models/DeadLetterEvent");
+
+const handleBookingEvent = async (message, producer) => {
+  let payload;
   try {
-    const payload = JSON.parse(message.value.toString());
+    payload = JSON.parse(message.value.toString());
     const { type, data } = payload;
 
     if (type === "booking.created") {
@@ -30,6 +33,35 @@ const handleBookingEvent = async (message) => {
     }
   } catch (error) {
     console.error("Error processing booking event in review-service:", error);
+
+    // DLQ Logic
+    try {
+      await DeadLetterEvent.create({
+        topic: process.env.KAFKA_BOOKING_TOPIC || "booking.events",
+        message: payload || message.value.toString(),
+        error: error.message,
+        service: "review-service"
+      });
+
+      if (producer) {
+        const dlqTopic = `${process.env.KAFKA_BOOKING_TOPIC || "booking.events"}.dlq`;
+        await producer.send({
+          topic: dlqTopic,
+          messages: [{ 
+            key: message.key ? message.key.toString() : null, 
+            value: message.value.toString(),
+            headers: {
+              ...message.headers,
+              'x-dead-letter-error': error.message,
+              'x-dead-letter-service': 'review-service'
+            }
+          }]
+        });
+        console.log(`[DLQ] Message published to ${dlqTopic}`);
+      }
+    } catch (dlqError) {
+      console.error("Critical: Failed to log event to DLQ", dlqError);
+    }
   }
 };
 

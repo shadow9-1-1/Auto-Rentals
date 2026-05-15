@@ -15,9 +15,12 @@ const invalidateBookingCache = async () => {
   }
 };
 
-const handlePaymentEvent = async (message) => {
+const DeadLetterEvent = require("../models/DeadLetterEvent");
+
+const handlePaymentEvent = async (message, producer) => {
+  let payload;
   try {
-    const payload = JSON.parse(message.value.toString());
+    payload = JSON.parse(message.value.toString());
     const { type, data } = payload;
 
     if (type === "payment.success") {
@@ -45,8 +48,6 @@ const handlePaymentEvent = async (message) => {
           ...booking.payment,
           status: "failed"
         };
-        // Optionally update booking status to cancelled or pending retry
-        // booking.status = "cancelled"; 
         await booking.save();
         console.log(`[KafkaConsumer] Marked payment as failed for booking ${bookingId}. Reason: ${reason}`);
         await invalidateBookingCache();
@@ -54,6 +55,36 @@ const handlePaymentEvent = async (message) => {
     }
   } catch (error) {
     console.error("Error processing payment event in booking-service:", error);
+    
+    // DLQ Logic: Log the failure to MongoDB for manual intervention or auto-retry
+    try {
+      await DeadLetterEvent.create({
+        topic: process.env.KAFKA_PAYMENT_TOPIC || "payment.events",
+        message: payload || message.value.toString(),
+        error: error.message,
+        service: "booking-service"
+      });
+
+      // Optionally publish to a real Kafka DLQ topic if configured
+      if (producer) {
+        const dlqTopic = `${process.env.KAFKA_PAYMENT_TOPIC || "payment.events"}.dlq`;
+        await producer.send({
+          topic: dlqTopic,
+          messages: [{ 
+            key: message.key ? message.key.toString() : null, 
+            value: message.value.toString(),
+            headers: {
+              ...message.headers,
+              'x-dead-letter-error': error.message,
+              'x-dead-letter-service': 'booking-service'
+            }
+          }]
+        });
+        console.log(`[DLQ] Message published to ${dlqTopic}`);
+      }
+    } catch (dlqError) {
+      console.error("Critical: Failed to log event to DLQ", dlqError);
+    }
   }
 };
 

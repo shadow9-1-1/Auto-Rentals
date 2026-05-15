@@ -26,9 +26,12 @@ const invalidateSearchCache = async (vehicleId = null) => {
   }
 };
 
-const handleBookingEvent = async (message) => {
+const DeadLetterEvent = require("../models/DeadLetterEvent");
+
+const handleBookingEvent = async (message, producer) => {
+  let payload;
   try {
-    const payload = JSON.parse(message.value.toString());
+    payload = JSON.parse(message.value.toString());
     const { type, data } = payload;
 
     if (type === "booking.created" || type === "booking.confirmed") {
@@ -66,6 +69,35 @@ const handleBookingEvent = async (message) => {
     }
   } catch (error) {
     console.error("Error processing booking event in vehicle-service:", error);
+    
+    // DLQ Logic: Log the failure to MongoDB
+    try {
+      await DeadLetterEvent.create({
+        topic: process.env.KAFKA_BOOKING_TOPIC || "booking.events",
+        message: payload || message.value.toString(),
+        error: error.message,
+        service: "vehicle-service"
+      });
+
+      if (producer) {
+        const dlqTopic = `${process.env.KAFKA_BOOKING_TOPIC || "booking.events"}.dlq`;
+        await producer.send({
+          topic: dlqTopic,
+          messages: [{ 
+            key: message.key ? message.key.toString() : null, 
+            value: message.value.toString(),
+            headers: {
+              ...message.headers,
+              'x-dead-letter-error': error.message,
+              'x-dead-letter-service': 'vehicle-service'
+            }
+          }]
+        });
+        console.log(`[DLQ] Message published to ${dlqTopic}`);
+      }
+    } catch (dlqError) {
+      console.error("Critical: Failed to log event to DLQ", dlqError);
+    }
   }
 };
 
