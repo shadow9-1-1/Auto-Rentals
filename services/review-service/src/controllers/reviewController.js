@@ -20,6 +20,34 @@ const invalidateReviewCache = async (vehicleId = null) => {
   }
 };
 
+/**
+ * Cross-service invalidation: the review-service writes vehicle ratings
+ * directly to the vehicle-service's MongoDB (shared DB). After that write,
+ * the vehicle-service Redis cache holds stale data. Since both services
+ * share the same Redis instance we can evict those keys here.
+ */
+const invalidateVehicleServiceCache = async (vehicleId) => {
+  try {
+    if (!redisClient.isOpen || !vehicleId) return;
+
+    // Evict the full vehicle document cache (has embedded ratings)
+    await redisClient.del(`vehicle:${vehicleId}`);
+
+    // Evict the dedicated ratings cache entry
+    await redisClient.del(`vehicle:ratings:${vehicleId}`);
+
+    // Evict all top-rated listing snapshots (rankings changed)
+    const topRatedKeys = await redisClient.sMembers("vehicle:top_rated_keys");
+    if (topRatedKeys && topRatedKeys.length > 0) {
+      await redisClient.del(topRatedKeys);
+    }
+    await redisClient.del("vehicle:top_rated_keys");
+  } catch (err) {
+    // Non-fatal — vehicle-service will serve slightly stale data until TTL expires
+    console.error("Cross-service vehicle cache invalidation error:", err);
+  }
+};
+
 const listReviews = async (req, res, next) => {
   try {
     if (redisClient.isOpen) {
@@ -100,10 +128,13 @@ const createReview = async (req, res, next) => {
 
     const review = await Review.create(reviewPayload);
 
-    // Update vehicle rating asynchronously (non-blocking)
-    updateVehicleRating(vehicleId).catch((err) => {
-      console.error(`Failed to update rating for vehicle ${vehicleId}:`, err);
-    });
+    // Update vehicle rating asynchronously — after it resolves, cross-invalidate
+    // the vehicle-service Redis cache so stale rating data is evicted immediately.
+    updateVehicleRating(vehicleId)
+      .then(() => invalidateVehicleServiceCache(vehicleId))
+      .catch((err) => {
+        console.error(`Failed to update rating for vehicle ${vehicleId}:`, err);
+      });
 
     await invalidateReviewCache(vehicleId);
 
@@ -166,11 +197,13 @@ const updateReview = async (req, res, next) => {
     Object.assign(review, updates);
     const updatedReview = await review.save();
 
-    // Update vehicle rating if rating changed (non-blocking)
+    // Update vehicle rating if rating changed — then cross-invalidate vehicle-service cache
     if (ratingChanged) {
-      updateVehicleRating(vehicleId).catch((err) => {
-        console.error(`Failed to update rating for vehicle ${vehicleId}:`, err);
-      });
+      updateVehicleRating(vehicleId)
+        .then(() => invalidateVehicleServiceCache(vehicleId))
+        .catch((err) => {
+          console.error(`Failed to update rating for vehicle ${vehicleId}:`, err);
+        });
     }
 
     await invalidateReviewCache(vehicleId);
@@ -208,10 +241,12 @@ const deleteReview = async (req, res, next) => {
 
     await Review.deleteOne({ _id: reviewId });
 
-    // Update vehicle rating after deletion (non-blocking)
-    updateVehicleRating(vehicleId).catch((err) => {
-      console.error(`Failed to update rating for vehicle ${vehicleId}:`, err);
-    });
+    // Update vehicle rating after deletion — then cross-invalidate vehicle-service cache
+    updateVehicleRating(vehicleId)
+      .then(() => invalidateVehicleServiceCache(vehicleId))
+      .catch((err) => {
+        console.error(`Failed to update rating for vehicle ${vehicleId}:`, err);
+      });
 
     await invalidateReviewCache(vehicleId);
 
@@ -235,6 +270,27 @@ const recalculateAllRatings = async (req, res, next) => {
     };
 
     await invalidateReviewCache();
+
+    // recalculateAllVehicleRatings touches every vehicle in the vehicle DB;
+    // flush all vehicle-service search/top-rated caches so nothing is stale.
+    // Individual vehicle:{id} caches will expire naturally via TTL (15 min).
+    try {
+      if (redisClient.isOpen) {
+        const topRatedKeys = await redisClient.sMembers("vehicle:top_rated_keys");
+        if (topRatedKeys && topRatedKeys.length > 0) {
+          await redisClient.del(topRatedKeys);
+        }
+        await redisClient.del("vehicle:top_rated_keys");
+
+        const searchKeys = await redisClient.sMembers("vehicle:search_keys");
+        if (searchKeys && searchKeys.length > 0) {
+          await redisClient.del(searchKeys);
+        }
+        await redisClient.del("vehicle:search_keys");
+      }
+    } catch (err) {
+      console.error("Failed to flush vehicle-service caches after bulk recalculate:", err);
+    }
 
     res.status(200).json(summary);
   } catch (error) {
