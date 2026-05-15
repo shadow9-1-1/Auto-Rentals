@@ -11,10 +11,21 @@ const metricsRouter = require("./routes/metrics");
 const authRouter = require("./routes/auth");
 const adminUsersRouter = require("./routes/adminUsers");
 const { configurePassport } = require("./config/passport");
+const logger = require("./utils/logger");
 
 const app = express();
 
 configurePassport();
+
+app.use((req, res, next) => {
+  logger.info("Incoming request", {
+    method: req.method,
+    url: req.url,
+    ip: req.ip,
+    userAgent: req.get("User-Agent"),
+  });
+  next();
+});
 
 app.use(helmet());
 app.use(cors());
@@ -34,6 +45,13 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   const status = err.status || 500;
+  logger.error("Error encountered", {
+    error: err.message,
+    stack: err.stack,
+    status,
+    url: req.url,
+    method: req.method,
+  });
   res.status(status).json({
     error: err.message || "Internal server error"
   });

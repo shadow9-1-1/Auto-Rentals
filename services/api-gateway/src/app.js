@@ -6,6 +6,7 @@ const { createProxyMiddleware, fixRequestBody } = require("http-proxy-middleware
 const rateLimit = require("express-rate-limit");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./docs/swagger");
+const logger = require("./utils/logger");
 
 const { allowPublicRoutes, authorizeRoles, requireRolesForMethods } = require("./middlewares/auth");
 
@@ -13,6 +14,16 @@ const healthRouter = require("./routes/health");
 const metricsRouter = require("./routes/metrics");
 
 const app = express();
+
+app.use((req, res, next) => {
+  logger.info("Incoming gateway request", {
+    method: req.method,
+    url: req.url,
+    ip: req.ip,
+    userAgent: req.get("User-Agent"),
+  });
+  next();
+});
 
 const serviceUrls = {
   auth: process.env.AUTH_SERVICE_URL || "http://localhost:4001",
@@ -35,6 +46,7 @@ app.use(
     pathRewrite: (path, req) => req.originalUrl,
     on: {
       error: (err, req, res) => {
+        logger.error("Webhook proxy error", { error: err.message, url: req.url });
         if (!res.headersSent) {
           res.status(502).json({ error: "Upstream service unavailable" });
         }
@@ -79,6 +91,7 @@ const proxyFor = (target) =>
     on: {
       proxyReq: fixRequestBody,
       error: (err, req, res) => {
+        logger.error("Proxy error", { error: err.message, target, url: req.url });
         if (!res.headersSent) {
           res.status(502).json({ error: "Upstream service unavailable" });
         }
@@ -135,6 +148,13 @@ app.use((err, req, res, next) => {
   }
 
   const status = err.status || 500;
+  logger.error("Gateway error", {
+    error: err.message,
+    stack: err.stack,
+    status,
+    url: req.url,
+    method: req.method,
+  });
   res.status(status).json({ error: err.message || "Internal server error" });
 });
 
