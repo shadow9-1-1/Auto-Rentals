@@ -1,0 +1,42 @@
+groups:
+  - name: auto-rentals-alerts
+    rules:
+      # API Downtime Alert
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "The service {{ $labels.job }} has been unreachable for more than 1 minute."
+
+      # High Latency Alert
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m]))) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency on {{ $labels.service }}"
+          description: "p95 latency is above 2 seconds for {{ $labels.service }}."
+
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: sum by (service) (rate(http_requests_total{status=~"5.."}[5m])) / sum by (service) (rate(http_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.service }}"
+          description: "Error rate is above 5% for the last 2 minutes."
+
+      # Kafka Processing Failure Alert
+      - alert: KafkaProcessingFailures
+        expr: sum by (topic, service) (rate(kafka_events_total{status="failed"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka event failures in {{ $labels.service }}"
+          description: "Service {{ $labels.service }} is experiencing Kafka event processing failures on topic {{ $labels.topic }}."

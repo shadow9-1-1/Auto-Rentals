@@ -261,6 +261,7 @@ services:
     image: prom/prometheus:v2.52.0
     volumes:
       - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - prometheus-data:/prometheus
     ports:
       - "9090:9090"
