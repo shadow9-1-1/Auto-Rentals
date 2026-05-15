@@ -7,6 +7,7 @@ const swaggerSpec = require("./docs/swagger");
 const passport = require("passport");
 
 const healthRouter = require("./routes/health");
+const metricsRouter = require("./routes/metrics");
 const authRouter = require("./routes/auth");
 const adminUsersRouter = require("./routes/adminUsers");
 const { configurePassport } = require("./config/passport");
@@ -23,6 +24,7 @@ app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true 
 app.use(passport.initialize());
 
 app.use("/health", healthRouter);
+app.use("/metrics", metricsRouter);
 app.use("/auth/admin/users", adminUsersRouter);
 app.use("/auth", authRouter);
 

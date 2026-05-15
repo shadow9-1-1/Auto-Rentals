@@ -7,6 +7,7 @@ const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./docs/swagger");
 
 const healthRouter = require("./routes/health");
+const metricsRouter = require("./routes/metrics");
 const vehicleRouter = require("./routes/vehicles");
 
 const app = express();
@@ -20,6 +21,7 @@ app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true 
 app.use("/uploads", express.static(path.resolve(__dirname, "..", "uploads")));
 
 app.use("/health", healthRouter);
+app.use("/metrics", metricsRouter);
 app.use("/vehicles", vehicleRouter);
 
 app.use((req, res) => {

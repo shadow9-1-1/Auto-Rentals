@@ -6,6 +6,7 @@ const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./docs/swagger");
 
 const healthRouter = require("./routes/health");
+const metricsRouter = require("./routes/metrics");
 const bookingRouter = require("./routes/bookings");
 
 const app = express();
@@ -17,6 +18,7 @@ app.use(morgan("dev"));
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
 
 app.use("/health", healthRouter);
+app.use("/metrics", metricsRouter);
 app.use("/bookings", bookingRouter);
 
 app.use((req, res) => {

@@ -10,6 +10,7 @@ const swaggerSpec = require("./docs/swagger");
 const { allowPublicRoutes, authorizeRoles, requireRolesForMethods } = require("./middlewares/auth");
 
 const healthRouter = require("./routes/health");
+const metricsRouter = require("./routes/metrics");
 
 const app = express();
 
@@ -68,6 +69,7 @@ app.use((req, res, next) => {
 });
 
 app.use("/health", healthRouter);
+app.use("/metrics", metricsRouter);
 
 const proxyFor = (target) =>
   createProxyMiddleware({
