@@ -8,7 +8,7 @@ const RefreshToken = require("../models/RefreshToken");
 const createAccessToken = (user) => {
   const payload = { sub: user._id, role: user.role, roles: user.roles };
   return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "1d"
+    expiresIn: process.env.JWT_EXPIRES_IN || "15m" // Shorter expiration for access tokens
   });
 };
 
@@ -19,6 +19,18 @@ const createRefreshToken = (user) => {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d"
   });
   return { token, jti };
+};
+
+const setTokenCookies = (res, accessToken, refreshToken) => {
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.COOKIE_SECURE === "true",
+    sameSite: "strict",
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days matching refresh token
+  };
+
+  res.cookie("accessToken", accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
+  res.cookie("refreshToken", refreshToken, cookieOptions);
 };
 
 const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
@@ -65,6 +77,9 @@ const register = async (req, res, next) => {
     const token = createAccessToken(user);
     const refreshPayload = createRefreshToken(user);
     await persistRefreshToken(user._id, refreshPayload.token, refreshPayload.jti);
+
+    setTokenCookies(res, token, refreshPayload.token);
+
     res.status(201).json({
       user: { id: user._id, email: user.email, role: user.role, roles: user.roles },
       token,
@@ -117,6 +132,9 @@ const login = async (req, res, next) => {
     const accessToken = createAccessToken(user);
     const refreshPayload = createRefreshToken(user);
     await persistRefreshToken(user._id, refreshPayload.token, refreshPayload.jti);
+
+    setTokenCookies(res, accessToken, refreshPayload.token);
+
     res.status(200).json({
       user: { id: user._id, email: user.email, role: user.role, roles: user.roles },
       token: accessToken,
@@ -130,7 +148,7 @@ const login = async (req, res, next) => {
 
 const refresh = async (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
 
     if (!refreshToken) {
       return res.status(400).json({ error: "Refresh token is required" });
@@ -171,6 +189,8 @@ const refresh = async (req, res, next) => {
     storedToken.replacedByTokenHash = hashToken(refreshPayload.token);
     await storedToken.save();
 
+    setTokenCookies(res, accessToken, refreshPayload.token);
+
     return res.status(200).json({
       user: { id: user._id, email: user.email, role: user.role, roles: user.roles },
       token: accessToken,
@@ -190,26 +210,29 @@ const refresh = async (req, res, next) => {
 
 const logout = async (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
-    if (!refreshToken) {
-      return res.status(400).json({ error: "Refresh token is required" });
+    const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+    if (refreshToken) {
+      try {
+        const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
+        const payload = jwt.verify(refreshToken, secret);
+        const tokenHash = hashToken(refreshToken);
+
+        await RefreshToken.updateOne(
+          { userId: payload.sub, jti: payload.jti, tokenHash },
+          { revokedAt: new Date(), revokedReason: "logout" }
+        );
+      } catch (e) {
+        // Continue logout even if token verification fails
+      }
     }
 
-    const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
-    const payload = jwt.verify(refreshToken, secret);
-    const tokenHash = hashToken(refreshToken);
-
-    await RefreshToken.updateOne(
-      { userId: payload.sub, jti: payload.jti, tokenHash },
-      { revokedAt: new Date(), revokedReason: "logout" }
-    );
-
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
     return res.status(200).json({ status: "logged out" });
   } catch (error) {
-    if (error && (error.name === "TokenExpiredError" || error.name === "JsonWebTokenError")) {
-      return res.status(200).json({ status: "logged out" });
-    }
-    return next(error);
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+    return res.status(200).json({ status: "logged out" });
   }
 };
 
@@ -223,6 +246,8 @@ const googleCallback = async (req, res, next) => {
     const accessToken = createAccessToken(user);
     const refreshPayload = createRefreshToken(user);
     await persistRefreshToken(user._id, refreshPayload.token, refreshPayload.jti);
+
+    setTokenCookies(res, accessToken, refreshPayload.token);
 
     const userData = { id: user._id, email: user.email, role: user.role, roles: user.roles };
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5000";
