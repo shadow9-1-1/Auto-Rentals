@@ -7,7 +7,7 @@ const getKafkaInstance = () => {
   }
 
   return new Kafka({
-    clientId: process.env.KAFKA_CLIENT_ID || "booking-service",
+    clientId: process.env.KAFKA_CLIENT_ID || "vehicle-service",
     brokers: brokers.split(",").map((broker) => broker.trim())
   });
 };
@@ -22,7 +22,7 @@ const connectProducer = async () => {
 const connectConsumer = async () => {
   const kafka = getKafkaInstance();
   const consumer = kafka.consumer({
-    groupId: process.env.KAFKA_CONSUMER_GROUP || "booking-service-group"
+    groupId: process.env.KAFKA_CONSUMER_GROUP || "vehicle-service-group"
   });
   await consumer.connect();
   return consumer;

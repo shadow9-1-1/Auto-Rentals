@@ -10,12 +10,32 @@ const { connectRedis } = require("./config/redis");
 const port = process.env.VEHICLE_SERVICE_PORT || process.env.PORT || 4002;
 
 Promise.all([connectDatabase(), connectRedis()])
-  .then(() => {
+  .then(async () => {
+    const { connectProducer, connectConsumer } = require("./config/kafka");
+    const { handleBookingEvent } = require("./consumers/bookingHandler");
+
+    const producer = await connectProducer();
+    app.locals.kafkaProducer = producer;
+
+    const consumer = await connectConsumer();
+    const BOOKING_TOPIC = process.env.KAFKA_BOOKING_TOPIC || "booking.events";
+
+    await consumer.subscribe({ topic: BOOKING_TOPIC, fromBeginning: false });
+
+    await consumer.run({
+      eachMessage: async ({ topic, message }) => {
+        if (topic === BOOKING_TOPIC) {
+          await handleBookingEvent(message);
+        }
+      }
+    });
+
     app.listen(port, () => {
       console.log(`Vehicle Service listening on port ${port}`);
+      console.log(`Consuming events from: ${BOOKING_TOPIC}`);
     });
   })
   .catch((error) => {
-    console.error("Failed to connect to MongoDB", error);
+    console.error("Failed to start Vehicle Service", error);
     process.exit(1);
   });
