@@ -6,14 +6,27 @@ const jwt = require("jsonwebtoken");
 const Vehicle = require("../models/Vehicle");
 const { redisClient } = require("../config/redis");
 
-const invalidateSearchCache = async () => {
+const invalidateSearchCache = async (vehicleId = null) => {
   try {
     if (redisClient.isOpen) {
+      // Clear all paginated search / filter results
       const keys = await redisClient.sMembers("vehicle:search_keys");
       if (keys && keys.length > 0) {
         await redisClient.del(keys);
       }
       await redisClient.del("vehicle:search_keys");
+
+      // Clear top-rated listing (any limit/minReviews combo)
+      const topRatedKeys = await redisClient.sMembers("vehicle:top_rated_keys");
+      if (topRatedKeys && topRatedKeys.length > 0) {
+        await redisClient.del(topRatedKeys);
+      }
+      await redisClient.del("vehicle:top_rated_keys");
+
+      // Clear per-vehicle ratings if a specific vehicle changed
+      if (vehicleId) {
+        await redisClient.del(`vehicle:ratings:${vehicleId}`);
+      }
     }
   } catch (err) {
     console.error("Redis invalidation error:", err);
@@ -357,7 +370,7 @@ const updateVehicle = async (req, res, next) => {
     if (redisClient.isOpen) {
       await redisClient.del(`vehicle:${vehicleId}`);
     }
-    await invalidateSearchCache();
+    await invalidateSearchCache(vehicleId);
 
     res.status(200).json({ item: updatedVehicle });
   } catch (error) {
@@ -389,7 +402,7 @@ const deleteVehicle = async (req, res, next) => {
     if (redisClient.isOpen) {
       await redisClient.del(`vehicle:${vehicleId}`);
     }
-    await invalidateSearchCache();
+    await invalidateSearchCache(vehicleId);
 
     res.status(200).json({ status: "Vehicle soft deleted successfully", item: vehicle });
   } catch (error) {
@@ -403,6 +416,15 @@ const getVehicleRatings = async (req, res, next) => {
 
     if (!vehicleId) {
       return res.status(400).json({ error: "vehicleId is required" });
+    }
+
+    // Cache check — ratings update infrequently (15 min TTL)
+    const cacheKey = `vehicle:ratings:${vehicleId}`;
+    if (redisClient.isOpen) {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return res.status(200).json({ item: JSON.parse(cached) });
+      }
     }
 
     const vehicle = await Vehicle.findById(vehicleId).select("ratings").lean();
@@ -423,6 +445,10 @@ const getVehicleRatings = async (req, res, next) => {
       lastUpdated: null
     };
 
+    if (redisClient.isOpen) {
+      await redisClient.setEx(cacheKey, 900, JSON.stringify(ratings)); // 15 minutes
+    }
+
     res.status(200).json({ item: ratings });
   } catch (error) {
     next(error);
@@ -433,6 +459,15 @@ const getTopRatedVehicles = async (req, res, next) => {
   try {
     const { limit = 10, minReviews = 5 } = req.query;
 
+    // Cache keyed by the query params — 10-minute TTL
+    const cacheKey = `vehicle:top_rated:limit=${limit}:min=${minReviews}`;
+    if (redisClient.isOpen) {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return res.status(200).json({ items: JSON.parse(cached) });
+      }
+    }
+
     const topVehicles = await Vehicle.find({
       "ratings.totalReviews": { $gte: Number(minReviews) }
     })
@@ -440,6 +475,11 @@ const getTopRatedVehicles = async (req, res, next) => {
       .sort({ "ratings.averageRating": -1 })
       .limit(Number(limit))
       .lean();
+
+    if (redisClient.isOpen) {
+      await redisClient.setEx(cacheKey, 600, JSON.stringify(topVehicles)); // 10 minutes
+      await redisClient.sAdd("vehicle:top_rated_keys", cacheKey);
+    }
 
     res.status(200).json({ items: topVehicles });
   } catch (error) {
@@ -572,7 +612,7 @@ const approveVehicleListing = async (req, res, next) => {
     if (redisClient.isOpen) {
       await redisClient.del(`vehicle:${vehicleId}`);
     }
-    await invalidateSearchCache();
+    await invalidateSearchCache(vehicleId);
 
     const appearsInSearch = await Vehicle.exists({
       _id: vehicleId,
@@ -619,7 +659,7 @@ const removeVehicleListing = async (req, res, next) => {
     if (redisClient.isOpen) {
       await redisClient.del(`vehicle:${vehicleId}`);
     }
-    await invalidateSearchCache();
+    await invalidateSearchCache(vehicleId);
 
     res.status(200).json({ item: vehicle });
   } catch (error) {
