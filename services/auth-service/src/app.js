@@ -13,11 +13,13 @@ const adminUsersRouter = require("./routes/adminUsers");
 const { configurePassport } = require("./config/passport");
 const logger = require("./utils/logger");
 const { correlationMiddleware } = require("./utils/correlation");
+const { metricsMiddleware } = require("./utils/metrics");
 
 const app = express();
 
 configurePassport();
 
+app.use(metricsMiddleware);
 app.use(correlationMiddleware);
 
 app.use((req, res, next) => {

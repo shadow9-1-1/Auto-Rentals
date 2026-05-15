@@ -8,6 +8,7 @@ const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./docs/swagger");
 const logger = require("./utils/logger");
 const { correlationMiddleware, getCorrelationId } = require("./utils/correlation");
+const { metricsMiddleware } = require("./utils/metrics");
 
 const { allowPublicRoutes, authorizeRoles, requireRolesForMethods } = require("./middlewares/auth");
 
@@ -16,6 +17,7 @@ const metricsRouter = require("./routes/metrics");
 
 const app = express();
 
+app.use(metricsMiddleware);
 app.use(correlationMiddleware);
 
 app.use((req, res, next) => {

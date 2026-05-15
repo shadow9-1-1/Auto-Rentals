@@ -1,5 +1,6 @@
 const Booking = require("../models/Booking");
 const { redisClient } = require("../config/redis");
+const { recordKafkaEvent } = require("../utils/metrics");
 
 const invalidateBookingCache = async () => {
   try {
@@ -38,6 +39,7 @@ const handlePaymentEvent = async (message, producer) => {
         };
         await booking.save();
         console.log(`[KafkaConsumer] Updated booking ${bookingId} to confirmed after successful payment.`);
+        recordKafkaEvent(process.env.KAFKA_PAYMENT_TOPIC || "payment.events", type, "success");
         await invalidateBookingCache();
       }
     } else if (type === "payment.failed") {
@@ -50,6 +52,7 @@ const handlePaymentEvent = async (message, producer) => {
         };
         await booking.save();
         console.log(`[KafkaConsumer] Marked payment as failed for booking ${bookingId}. Reason: ${reason}`);
+        recordKafkaEvent(process.env.KAFKA_PAYMENT_TOPIC || "payment.events", type, "success");
         await invalidateBookingCache();
       }
     }
@@ -85,6 +88,7 @@ const handlePaymentEvent = async (message, producer) => {
     } catch (dlqError) {
       console.error("Critical: Failed to log event to DLQ", dlqError);
     }
+    recordKafkaEvent(process.env.KAFKA_PAYMENT_TOPIC || "payment.events", payload?.type || "unknown", "failed");
   }
 };
 
