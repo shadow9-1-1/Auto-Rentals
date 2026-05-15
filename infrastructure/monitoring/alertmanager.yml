@@ -1,0 +1,22 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: '{{ .Env.ALERTMANAGER_SMTP_SMARTHOST }}'
+  smtp_from: '{{ .Env.ALERTMANAGER_SMTP_FROM }}'
+  smtp_auth_username: '{{ .Env.ALERTMANAGER_SMTP_AUTH_USERNAME }}'
+  smtp_auth_password: '{{ .Env.ALERTMANAGER_SMTP_AUTH_PASSWORD }}'
+  smtp_require_tls: '{{ .Env.ALERTMANAGER_SMTP_REQUIRE_TLS }}'
+  
+route:
+  group_by: ['alertname', 'service']
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 3h
+  receiver: 'email-notifications'
+
+receivers:
+  - name: 'email-notifications'
+    email_configs:
+      - to: 'admin@auto-rentals.com'
+        send_resolved: true
+        headers:
+          subject: '{{ .Status | toUpper }} - [{{ .CommonLabels.severity }}] {{ .CommonLabels.alertname }}'
