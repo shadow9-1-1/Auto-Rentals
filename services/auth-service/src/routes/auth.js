@@ -1,9 +1,11 @@
 const router = require("express").Router();
 const authController = require("../controllers/authController");
 const passport = require("passport");
+const validate = require("../middlewares/validate");
+const { registerSchema, loginSchema } = require("../validations/authValidation");
 
-router.post("/register", authController.register);
-router.post("/login", authController.login);
+router.post("/register", validate({ body: registerSchema }), authController.register);
+router.post("/login", validate({ body: loginSchema }), authController.login);
 router.post("/refresh", authController.refresh);
 router.post("/logout", authController.logout);
 router.get(
