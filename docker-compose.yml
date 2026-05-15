@@ -278,6 +278,19 @@ services:
     networks:
       - auto-rentals
 
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api-gateway
+    networks:
+      - auto-rentals
+
   alertmanager:
     image: prom/alertmanager:v0.27.0
     env_file:
