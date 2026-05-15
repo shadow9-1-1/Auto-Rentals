@@ -6,12 +6,15 @@ const morgan = require("morgan");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./docs/swagger");
 const logger = require("./utils/logger");
+const { correlationMiddleware } = require("./utils/correlation");
 
 const healthRouter = require("./routes/health");
 const metricsRouter = require("./routes/metrics");
 const vehicleRouter = require("./routes/vehicles");
 
 const app = express();
+
+app.use(correlationMiddleware);
 
 app.use((req, res, next) => {
   logger.info("Incoming request", {

@@ -13,6 +13,7 @@ Promise.all([connectDatabase(), connectRedis()])
   .then(async () => {
     const { connectProducer, connectConsumer } = require("./config/kafka");
     const { handleBookingEvent } = require("./consumers/bookingHandler");
+    const { wrapCorrelation } = require("./utils/correlation");
 
     const producer = await connectProducer();
     app.locals.kafkaProducer = producer;
@@ -24,9 +25,15 @@ Promise.all([connectDatabase(), connectRedis()])
 
     await consumer.run({
       eachMessage: async ({ topic, message }) => {
-        if (topic === BOOKING_TOPIC) {
-          await handleBookingEvent(message, producer);
-        }
+        const correlationId = message.headers && message.headers["x-correlation-id"] 
+          ? message.headers["x-correlation-id"].toString() 
+          : null;
+          
+        await wrapCorrelation(correlationId, async () => {
+          if (topic === BOOKING_TOPIC) {
+            await handleBookingEvent(message, producer);
+          }
+        });
       }
     });
 

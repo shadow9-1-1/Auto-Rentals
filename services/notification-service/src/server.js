@@ -28,15 +28,23 @@ const startServer = async () => {
     await consumer.subscribe({ topic: BOOKING_TOPIC, fromBeginning: false });
     await consumer.subscribe({ topic: PAYMENT_TOPIC, fromBeginning: false });
 
+    const { wrapCorrelation } = require("./utils/correlation");
+
     // Start consuming messages and dispatch to the correct handler
     await consumer.run({
       eachMessage: async ({ topic, partition, message }) => {
-        console.log(`Received message from topic '${topic}' [partition ${partition}]`);
-        if (topic === BOOKING_TOPIC) {
-          await handleBookingEvent(message, producer);
-        } else if (topic === PAYMENT_TOPIC) {
-          await handlePaymentEvent(message, producer);
-        }
+        const correlationId = message.headers && message.headers["x-correlation-id"] 
+          ? message.headers["x-correlation-id"].toString() 
+          : null;
+
+        await wrapCorrelation(correlationId, async () => {
+          console.log(`Received message from topic '${topic}' [partition ${partition}]`);
+          if (topic === BOOKING_TOPIC) {
+            await handleBookingEvent(message, producer);
+          } else if (topic === PAYMENT_TOPIC) {
+            await handlePaymentEvent(message, producer);
+          }
+        });
       }
     });
 

@@ -1,5 +1,6 @@
 const Booking = require("../models/Booking");
 const { redisClient } = require("../config/redis");
+const { getKafkaCorrelationHeaders } = require("../utils/correlation");
 
 const invalidateBookingCache = async () => {
   try {

@@ -2,6 +2,8 @@ const winston = require("winston");
 const { Client } = require("@opensearch-project/opensearch");
 const Transport = require("winston-transport");
 
+const { getCorrelationId } = require("./correlation");
+
 // Custom OpenSearch Transport
 class OpenSearchTransport extends Transport {
   constructor(opts) {
@@ -18,11 +20,13 @@ class OpenSearchTransport extends Transport {
     });
 
     try {
+      const correlationId = getCorrelationId();
       await this.client.index({
         index: `${this.index}-${new Date().toISOString().split("T")[0]}`,
         body: {
           "@timestamp": new Date().toISOString(),
           ...info,
+          correlationId,
           service: process.env.SERVICE_NAME || "unknown-service",
         },
       });
@@ -40,7 +44,10 @@ const logger = winston.createLogger({
     winston.format.timestamp(),
     winston.format.json()
   ),
-  defaultMeta: { service: process.env.SERVICE_NAME || "unknown-service" },
+  defaultMeta: { 
+    service: process.env.SERVICE_NAME || "unknown-service",
+    get correlationId() { return getCorrelationId(); }
+  },
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(

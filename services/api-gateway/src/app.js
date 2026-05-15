@@ -7,6 +7,7 @@ const rateLimit = require("express-rate-limit");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./docs/swagger");
 const logger = require("./utils/logger");
+const { correlationMiddleware, getCorrelationId } = require("./utils/correlation");
 
 const { allowPublicRoutes, authorizeRoles, requireRolesForMethods } = require("./middlewares/auth");
 
@@ -14,6 +15,8 @@ const healthRouter = require("./routes/health");
 const metricsRouter = require("./routes/metrics");
 
 const app = express();
+
+app.use(correlationMiddleware);
 
 app.use((req, res, next) => {
   logger.info("Incoming gateway request", {
@@ -45,6 +48,10 @@ app.use(
     changeOrigin: true,
     pathRewrite: (path, req) => req.originalUrl,
     on: {
+      proxyReq: (proxyReq, req, res) => {
+        const cid = getCorrelationId();
+        if (cid) proxyReq.setHeader("x-correlation-id", cid);
+      },
       error: (err, req, res) => {
         logger.error("Webhook proxy error", { error: err.message, url: req.url });
         if (!res.headersSent) {
@@ -89,7 +96,11 @@ const proxyFor = (target) =>
     changeOrigin: true,
     pathRewrite: (path, req) => req.originalUrl,
     on: {
-      proxyReq: fixRequestBody,
+      proxyReq: (proxyReq, req, res) => {
+        const cid = getCorrelationId();
+        if (cid) proxyReq.setHeader("x-correlation-id", cid);
+        fixRequestBody(proxyReq, req, res);
+      },
       error: (err, req, res) => {
         logger.error("Proxy error", { error: err.message, target, url: req.url });
         if (!res.headersSent) {
