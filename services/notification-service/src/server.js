@@ -43,7 +43,7 @@ const startServer = async () => {
     app.listen(port, () => {
       console.log(`Notification Service listening on port ${port}`);
       console.log(`Consuming events from: ${BOOKING_TOPIC}, ${PAYMENT_TOPIC}`);
-      startRetryWorker();
+      startRetryWorker(producer);
     });
   } catch (error) {
     console.error("Failed to start Notification Service", error);

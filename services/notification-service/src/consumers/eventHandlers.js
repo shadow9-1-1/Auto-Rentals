@@ -61,7 +61,14 @@ const handlePaymentEvent = async (message, producer) => {
         currency: data.currency,
         userName: data.userName
       });
-      await publishNotificationEvent(producer, "notification.sent", { to, type: "paymentConfirmation" });
+      await publishNotificationEvent(producer, "notification.sent", { to, type: "paymentConfirmation", bookingId: data.bookingId });
+    } else if (type === "payment.failed") {
+      await sendEmail(to, "paymentFailed", {
+        bookingId: data.bookingId,
+        reason: data.reason,
+        userName: data.userName
+      });
+      await publishNotificationEvent(producer, "notification.sent", { to, type: "paymentFailed", bookingId: data.bookingId });
     } else {
       console.log(`Unhandled payment event type: ${type}`);
     }
@@ -72,5 +79,6 @@ const handlePaymentEvent = async (message, producer) => {
 
 module.exports = {
   handleBookingEvent,
-  handlePaymentEvent
+  handlePaymentEvent,
+  publishNotificationEvent
 };

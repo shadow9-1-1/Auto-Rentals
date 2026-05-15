@@ -108,7 +108,7 @@ const handleStripeWebhook = async (req, res) => {
         });
       }
 
-      // Emit Kafka event
+      // Emit payment.success Kafka event
       const producer = req.app.locals.kafkaProducer;
       if (producer) {
         const topic = process.env.KAFKA_PAYMENT_TOPIC || "payment.events";
@@ -134,6 +134,85 @@ const handleStripeWebhook = async (req, res) => {
 
     } catch (err) {
       console.error("Failed to process checkout.session.completed", err);
+    }
+  }
+
+  // Stripe fires this when a checkout session expires without payment
+  if (event.type === "checkout.session.expired") {
+    const session = event.data.object;
+    const bookingId = session.metadata && session.metadata.bookingId;
+
+    try {
+      await Payment.findOneAndUpdate(
+        { providerPaymentId: session.id },
+        { status: "failed" }
+      );
+
+      const producer = req.app.locals.kafkaProducer;
+      if (producer) {
+        const topic = process.env.KAFKA_PAYMENT_TOPIC || "payment.events";
+        const payload = {
+          type: "payment.failed",
+          data: {
+            bookingId,
+            providerPaymentId: session.id,
+            reason: "checkout_session_expired"
+          }
+        };
+        try {
+          await producer.send({
+            topic,
+            messages: [{ key: bookingId || session.id, value: JSON.stringify(payload) }]
+          });
+          console.log(`Published payment.failed for expired session ${session.id}`);
+        } catch (kafkaErr) {
+          console.error("Failed to publish payment.failed (expired) event", kafkaErr);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to process checkout.session.expired", err);
+    }
+  }
+
+  // Stripe fires this when a card is declined or 3DS authentication fails
+  if (event.type === "payment_intent.payment_failed") {
+    const intent = event.data.object;
+    const bookingId = intent.metadata && intent.metadata.bookingId;
+
+    try {
+      // Mark any linked payment record as failed
+      if (intent.id) {
+        await Payment.findOneAndUpdate(
+          { providerPaymentId: intent.id },
+          { status: "failed" }
+        );
+      }
+
+      const producer = req.app.locals.kafkaProducer;
+      if (producer) {
+        const topic = process.env.KAFKA_PAYMENT_TOPIC || "payment.events";
+        const payload = {
+          type: "payment.failed",
+          data: {
+            bookingId: bookingId || null,
+            providerPaymentId: intent.id,
+            reason: intent.last_payment_error
+              ? intent.last_payment_error.message
+              : "payment_intent_failed"
+          }
+        };
+        try {
+          await producer.send({
+            topic,
+            messages: [{ key: bookingId || intent.id, value: JSON.stringify(payload) }]
+          });
+          console.log(`Published payment.failed for intent ${intent.id}`);
+        } catch (kafkaErr) {
+          console.error("Failed to publish payment.failed (intent) event", kafkaErr);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to process payment_intent.payment_failed", err);
     }
   }
 

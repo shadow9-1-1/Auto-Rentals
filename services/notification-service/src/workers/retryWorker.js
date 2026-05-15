@@ -10,8 +10,9 @@ const getNextRetryDelay = (attempts) => {
   return BACKOFF_MINUTES[index] * 60 * 1000;
 };
 
-const processRetryQueue = async () => {
+const processRetryQueue = async (producer) => {
   const now = new Date();
+  const { publishNotificationEvent } = require("../consumers/eventHandlers");
 
   const pending = await FailedNotification.find({
     status: { $in: ["pending", "retrying"] },
@@ -34,12 +35,32 @@ const processRetryQueue = async () => {
       record.status = "resolved";
       await record.save();
       console.log(`[RetryQueue] Successfully retried notification ${record._id} (${record.templateName} → ${record.to})`);
+
+      // Emit notification.sent event
+      if (producer) {
+        await publishNotificationEvent(producer, "notification.sent", { 
+          to: record.to, 
+          type: record.templateName, 
+          bookingId: record.data && record.data.bookingId,
+          isRetry: true
+        });
+      }
     } catch (err) {
       console.error(`[RetryQueue] Retry attempt ${record.attempts} failed for ${record._id}: ${err.message}`);
 
       if (record.attempts >= record.maxRetries) {
         record.status = "exhausted";
         console.error(`[RetryQueue] Notification ${record._id} exhausted all ${record.maxRetries} retries. Marked as failed permanently.`);
+        
+        // Emit notification.failed event
+        if (producer) {
+          await publishNotificationEvent(producer, "notification.failed", { 
+            to: record.to, 
+            type: record.templateName, 
+            bookingId: record.data && record.data.bookingId,
+            error: err.message
+          });
+        }
       } else {
         record.status = "pending";
         record.nextRetryAt = new Date(Date.now() + getNextRetryDelay(record.attempts));
@@ -51,11 +72,11 @@ const processRetryQueue = async () => {
   }
 };
 
-const startRetryWorker = () => {
+const startRetryWorker = (producer) => {
   // Run every minute
   cron.schedule("* * * * *", async () => {
     try {
-      await processRetryQueue();
+      await processRetryQueue(producer);
     } catch (err) {
       console.error("[RetryQueue] Worker crashed:", err);
     }

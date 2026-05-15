@@ -15,6 +15,7 @@ const transport = nodemailer.createTransport({
 const SUBJECTS = {
   bookingConfirmation: "Your Booking is Confirmed!",
   paymentConfirmation: "Payment Receipt - Auto Rentals",
+  paymentFailed: "Payment Failed - Action Required",
   cancellation: "Booking Cancellation Notice"
 };
 

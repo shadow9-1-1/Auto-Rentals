@@ -123,8 +123,8 @@ const updateBookingStatus = async (req, res, next) => {
     const { id } = req.params;
     const { status, cancellationReason } = req.body;
 
-    if (!["confirmed", "cancelled"].includes(status)) {
-      return res.status(400).json({ error: "Invalid status update. Only confirmed or cancelled are allowed." });
+    if (!["confirmed", "cancelled", "completed"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status update. Only confirmed, cancelled, or completed are allowed." });
     }
 
     const booking = await Booking.findById(id);
