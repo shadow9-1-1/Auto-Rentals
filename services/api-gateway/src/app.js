@@ -40,7 +40,16 @@ const serviceUrls = {
 };
 
 app.use(helmet());
-app.use(cors());
+
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || "http://localhost:5000",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-correlation-id"],
+  credentials: true,
+  maxAge: 86400, // 24 hours cache for preflight
+};
+
+app.use(cors(corsOptions));
 
 // Route Stripe webhooks directly to payment-service to preserve raw body and bypass auth
 app.use(
