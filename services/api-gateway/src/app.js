@@ -72,12 +72,22 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." }
 });
 
-app.use(limiter);
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many authentication attempts, please try again later." }
+});
 
 app.use(allowPublicRoutes(["/health", "/auth", "/docs", "/metrics"]));
+
+app.use("/auth", authLimiter);
+app.use("/", limiter);
 
 app.use((req, res, next) => {
   if (["POST", "PUT", "PATCH"].includes(req.method)) {
